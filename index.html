@@ -20,18 +20,18 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        textarea::-webkit-scrollbar, #resultsArea::-webkit-scrollbar, .tab-content::-webkit-scrollbar, #calculatedOddsResultContainer::-webkit-scrollbar {
+        textarea::-webkit-scrollbar, #resultsArea::-webkit-scrollbar, .tab-content::-webkit-scrollbar, #calculatedOddsResultContainer::-webkit-scrollbar, .over-under-section div::-webkit-scrollbar {
             width: 8px;
         }
-        textarea::-webkit-scrollbar-track, #resultsArea::-webkit-scrollbar-track, .tab-content::-webkit-scrollbar-track, #calculatedOddsResultContainer::-webkit-scrollbar-track {
+        textarea::-webkit-scrollbar-track, #resultsArea::-webkit-scrollbar-track, .tab-content::-webkit-scrollbar-track, #calculatedOddsResultContainer::-webkit-scrollbar-track, .over-under-section div::-webkit-scrollbar-track {
             background: #f1f1f1;
             border-radius: 10px;
         }
-        textarea::-webkit-scrollbar-thumb, #resultsArea::-webkit-scrollbar-thumb, .tab-content::-webkit-scrollbar-thumb, #calculatedOddsResultContainer::-webkit-scrollbar-thumb {
+        textarea::-webkit-scrollbar-thumb, #resultsArea::-webkit-scrollbar-thumb, .tab-content::-webkit-scrollbar-thumb, #calculatedOddsResultContainer::-webkit-scrollbar-thumb, .over-under-section div::-webkit-scrollbar-thumb {
             background: #888;
             border-radius: 10px;
         }
-        textarea::-webkit-scrollbar-thumb:hover, #resultsArea::-webkit-scrollbar-thumb:hover, .tab-content::-webkit-scrollbar-thumb:hover, #calculatedOddsResultContainer::-webkit-scrollbar-thumb:hover {
+        textarea::-webkit-scrollbar-thumb:hover, #resultsArea::-webkit-scrollbar-thumb:hover, .tab-content::-webkit-scrollbar-thumb:hover, #calculatedOddsResultContainer::-webkit-scrollbar-thumb:hover, .over-under-section div::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
         .tab-button {
@@ -89,6 +89,18 @@
         }
         input[type="file"].hidden-file-input {
             display: none;
+        }
+        .over-under-section {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+        }
+        .over-under-section h5 {
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* font-semibold */
+            color: #4b5563; /* text-gray-600 */
+            margin-bottom: 0.5rem;
         }
     </style>
 </head>
@@ -154,9 +166,56 @@
             </div>
             <button id="showSimulatedOddsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out mb-4">Show/Refresh Market Odds for Group</button>
             <div id="simulatedOddsStatus" class="text-sm text-red-500 mb-4"></div>
+            
             <div id="calculatedOddsResultContainer" class="mt-2 p-1 bg-gray-50 rounded-md shadow-inner max-h-[60vh] overflow-y-auto mb-6">
                 <div id="calculatedOddsResultContent" class="text-sm"> Select a group and click "Show/Refresh Market Odds" to see standard market results. </div>
             </div>
+
+            <hr class="my-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Over/Under Line Odds</h3>
+            <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="over-under-section">
+                    <h5>Total Group Goals O/U</h5>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="number" id="ouTotalGroupGoalsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 10.5">
+                        <button onclick="calculateSingleOverUnder('totalGroupGoalsSims', 'ouTotalGroupGoalsLine', 'ouTotalGroupGoalsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
+                    </div>
+                    <div id="ouTotalGroupGoalsResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5>Points of 1st Placed Team O/U</h5>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="number" id="ouFirstPlacePtsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 6.5">
+                        <button onclick="calculateSingleOverUnder('firstPlacePtsSims', 'ouFirstPlacePtsLine', 'ouFirstPlacePtsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
+                    </div>
+                    <div id="ouFirstPlacePtsResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5>Points of 4th Placed Team O/U</h5>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="number" id="ouFourthPlacePtsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 1.5">
+                        <button onclick="calculateSingleOverUnder('fourthPlacePtsSims', 'ouFourthPlacePtsLine', 'ouFourthPlacePtsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
+                    </div>
+                    <div id="ouFourthPlacePtsResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5>Goals For by 1st Placed Team O/U</h5>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="number" id="ouFirstPlaceGFLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 5.5">
+                        <button onclick="calculateSingleOverUnder('firstPlaceGFSims', 'ouFirstPlaceGFLine', 'ouFirstPlaceGFResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
+                    </div>
+                    <div id="ouFirstPlaceGFResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5>Goals For by 4th Placed Team O/U</h5>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="number" id="ouFourthPlaceGFLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 2.5">
+                        <button onclick="calculateSingleOverUnder('fourthPlaceGFSims', 'ouFourthPlaceGFLine', 'ouFourthPlaceGFResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
+                    </div>
+                    <div id="ouFourthPlaceGFResult" class="text-xs"></div>
+                </div>
+            </div>
+
 
             <hr class="my-6">
             <h3 class="text-lg font-semibold text-gray-700 mb-3">Custom Team Prop Odds</h3>
@@ -245,7 +304,7 @@
             return result;
         }
 
-        function poissonPMF(mu, k) { // Poisson Probability Mass Function
+        function poissonPMF(mu, k) { 
             if (mu < 0 || k < 0 || !Number.isInteger(k)) return 0;
             if (mu === 0 && k === 0) return 1;
             if (mu === 0 && k > 0) return 0;
@@ -254,7 +313,7 @@
             return (Math.pow(mu, k) * Math.exp(-mu)) / factK;
         }
 
-        function poissonRandom(lambda) { // Generates a random number from Poisson distribution
+        function poissonRandom(lambda) { 
             if (lambda <= 0) return 0;
             let L = Math.exp(-lambda);
             let k = 0;
@@ -526,8 +585,8 @@
                     let cGTG=0;
             
                     cGMs.forEach(m=>{
-                        const g1=poissonRandom(m.lambda1); // CRITICAL: poissonRandom must be defined
-                        const g2=poissonRandom(m.lambda2); // CRITICAL: poissonRandom must be defined
+                        const g1=poissonRandom(m.lambda1); 
+                        const g2=poissonRandom(m.lambda2); 
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
                         cGTG+=(g1+g2); 
@@ -554,7 +613,7 @@
                         aggStats[gK].firstPlacePtsSims.push(rTs[0].pts); 
                         aggStats[gK].firstPlaceGFSims.push(rTs[0].gf);
                     } 
-                    if(rTs.length>=4&&aggStats[gK]){ // Assuming 4-team groups
+                    if(rTs.length>=4&&aggStats[gK]){ 
                         aggStats[gK].fourthPlacePtsSims.push(rTs[3].pts); 
                         aggStats[gK].fourthPlaceGFSims.push(rTs[3].gf);
                     }
@@ -679,35 +738,48 @@
             } else { html += `<p class="text-xs text-gray-500">No SF data.</p>`; }
 
             const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-3 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4>`; if(topAD.length>0){html+=`<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pair</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;topAD.forEach(([k,c])=>{const tP=currentNumSims>0?c/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${k}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;}else{html+=`<p class="text-xs text-gray-500">No AD data.</p>`;}
-
-            const groupGoalsRanges = [ {label: "0-8", min:0, max:8}, {label: "9-11", min:9, max:11}, {label: "12-14", min:12, max:14}, {label: "15-17", min:15, max:17}, {label: "18-20", min:18, max:20}, {label: "21+", min:21, max:Infinity}];
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Total Group Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Range</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            groupGoalsRanges.forEach(range => { const count = (groupData.groupTotalGoalsSims || []).filter(g => g >= range.min && g <= range.max).length; const prob = currentNumSims > 0 ? count / currentNumSims : 0; const odd = calculateOddWithMargin(prob, marginDecimal); html += `<tr><td>${range.label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${odd}</td></tr>`; }); html += `</tbody></table>`;
-
+            
             const probAny9Pts = currentNumSims > 0 ? (groupData.anyTeam9PtsCount || 0) / currentNumSims : 0; const oddAny9Pts = calculateOddWithMargin(probAny9Pts, marginDecimal);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Specials:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Event</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
             html += `<tr><td>Any Team scores 9 Pts</td><td>${(probAny9Pts * 100).toFixed(1)}%</td><td>${oddAny9Pts}</td></tr>`;
             const probAny0Pts = currentNumSims > 0 ? (groupData.anyTeam0PtsCount || 0) / currentNumSims : 0; const oddAny0Pts = calculateOddWithMargin(probAny0Pts, marginDecimal);
             html += `<tr><td>Any Team scores 0 Pts</td><td>${(probAny0Pts * 100).toFixed(1)}%</td><td>${oddAny0Pts}</td></tr></tbody></table>`;
 
-            const firstPtsRanges = [{label: "0-4", min:0, max:4}, {label: "5-6", min:5, max:6}, {label: "7", min:7, max:7}, {label: "9", min:9, max:9}];
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Points of 1st Placed Team:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pts Range</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            firstPtsRanges.forEach(range => { const count = (groupData.firstPlacePtsSims || []).filter(p => p >= range.min && p <= range.max).length; const prob = currentNumSims > 0 ? count / currentNumSims : 0; const odd = calculateOddWithMargin(prob, marginDecimal); html += `<tr><td>${range.label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${odd}</td></tr>`; }); html += `</tbody></table>`;
-            
-            const fourthPtsRanges = [{label: "0", min:0, max:0}, {label: "1", min:1, max:1}, {label: "2-3", min:2, max:3}, {label: "4+", min:4, max:Infinity}];
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Points of 4th Placed Team:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pts Range</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            fourthPtsRanges.forEach(range => { const count = (groupData.fourthPlacePtsSims || []).filter(p => p >= range.min && p <= range.max).length; const prob = currentNumSims > 0 ? count / currentNumSims : 0; const odd = calculateOddWithMargin(prob, marginDecimal); html += `<tr><td>${range.label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${odd}</td></tr>`; }); html += `</tbody></table>`;
-
-            const firstGFRanges = [{label: "0-2", min:0, max:2}, {label: "3-4", min:3, max:4}, {label: "5-6", min:5, max:6}, {label: "7-8", min:7, max:8}, {label: "9+", min:9, max:Infinity}];
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Goals For by 1st Placed Team:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>GF Range</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            firstGFRanges.forEach(range => { const count = (groupData.firstPlaceGFSims || []).filter(gf => gf >= range.min && gf <= range.max).length; const prob = currentNumSims > 0 ? count / currentNumSims : 0; const odd = calculateOddWithMargin(prob, marginDecimal); html += `<tr><td>${range.label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${odd}</td></tr>`; }); html += `</tbody></table>`;
-
-            const fourthGFRanges = [{label: "0-1", min:0, max:1}, {label: "2-3", min:2, max:3}, {label: "4-5", min:4, max:5}, {label: "6+", min:6, max:Infinity}];
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Goals For by 4th Placed Team:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>GF Range</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            fourthGFRanges.forEach(range => { const count = (groupData.fourthPlaceGFSims || []).filter(gf => gf >= range.min && gf <= range.max).length; const prob = currentNumSims > 0 ? count / currentNumSims : 0; const odd = calculateOddWithMargin(prob, marginDecimal); html += `<tr><td>${range.label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${odd}</td></tr>`; }); html += `</tbody></table>`;
-
             calculatedOddsResultContentEl.innerHTML = html;
         });
+
+        function calculateSingleOverUnder(dataKey, inputLineId, resultElementId) {
+            const selectedGroupKey = simGroupSelectEl.value;
+            const marginPercent = parseFloat(simBookieMarginEl.value);
+            const lineValue = parseFloat(document.getElementById(inputLineId).value);
+            const resultEl = document.getElementById(resultElementId);
+
+            resultEl.innerHTML = ""; // Clear previous
+
+            if (!selectedGroupKey) { resultEl.innerHTML = '<p class="text-red-500">Select group.</p>'; return; }
+            if (isNaN(marginPercent) || marginPercent < 0) { resultEl.innerHTML = '<p class="text-red-500">Valid margin.</p>'; return; }
+            if (isNaN(lineValue)) { resultEl.innerHTML = '<p class="text-red-500">Valid line value.</p>'; return; }
+            
+            const groupData = simulationAggStats[selectedGroupKey];
+            if (!groupData || !groupData[dataKey] || currentNumSims === 0) { resultEl.innerHTML = '<p class="text-gray-500">No sim data.</p>'; return; }
+
+            const simValues = groupData[dataKey];
+            const overCount = simValues.filter(val => val > lineValue).length;
+            const underCount = simValues.filter(val => val < lineValue).length;
+
+            const probOver = overCount / currentNumSims;
+            const probUnder = underCount / currentNumSims;
+            const marginDecimal = marginPercent / 100;
+
+            const oddOver = calculateOddWithMargin(probOver, marginDecimal);
+            const oddUnder = calculateOddWithMargin(probUnder, marginDecimal);
+
+            resultEl.innerHTML = `
+                P(Over ${lineValue}): ${(probOver * 100).toFixed(1)}% (Odd: ${oddOver})<br>
+                P(Under ${lineValue}): ${(probUnder * 100).toFixed(1)}% (Odd: ${oddUnder})
+            `;
+        }
+
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
             const groupKey = simGroupSelectEl.value;
@@ -768,6 +840,12 @@
             simulatedOddsStatusEl.textContent = "";
             customProbInputsContainerEl.classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = "Custom prop odds will appear here...";
+            // Clear O/U input fields and results
+            document.getElementById('ouTotalGroupGoalsLine').value = ''; document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
+            document.getElementById('ouFirstPlacePtsLine').value = ''; document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFourthPlacePtsLine').value = ''; document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFirstPlaceGFLine').value = ''; document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
+            document.getElementById('ouFourthPlaceGFLine').value = ''; document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
         });
 
         // --- Initial Sample Data ---
