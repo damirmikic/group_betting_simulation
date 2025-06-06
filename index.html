@@ -182,42 +182,22 @@
             <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="over-under-section">
                     <h5>Total Group Goals O/U <span id="expectedTotalGroupGoals" class="expected-value-info"></span></h5>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="number" id="ouTotalGroupGoalsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 10.5">
-                        <button onclick="calculateSingleOverUnder('groupTotalGoalsSims', 'ouTotalGroupGoalsLine', 'ouTotalGroupGoalsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
-                    </div>
                     <div id="ouTotalGroupGoalsResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5>Points of 1st Placed Team O/U <span id="expectedFirstPlacePts" class="expected-value-info"></span></h5>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="number" id="ouFirstPlacePtsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 6.5">
-                        <button onclick="calculateSingleOverUnder('firstPlacePtsSims', 'ouFirstPlacePtsLine', 'ouFirstPlacePtsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
-                    </div>
                     <div id="ouFirstPlacePtsResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5>Points of 4th Placed Team O/U <span id="expectedFourthPlacePts" class="expected-value-info"></span></h5>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="number" id="ouFourthPlacePtsLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 1.5">
-                        <button onclick="calculateSingleOverUnder('fourthPlacePtsSims', 'ouFourthPlacePtsLine', 'ouFourthPlacePtsResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
-                    </div>
                     <div id="ouFourthPlacePtsResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5>Goals For by 1st Placed Team O/U <span id="expectedFirstPlaceGF" class="expected-value-info"></span></h5>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="number" id="ouFirstPlaceGFLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 5.5">
-                        <button onclick="calculateSingleOverUnder('firstPlaceGFSims', 'ouFirstPlaceGFLine', 'ouFirstPlaceGFResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
-                    </div>
                     <div id="ouFirstPlaceGFResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5>Goals For by 4th Placed Team O/U <span id="expectedFourthPlaceGF" class="expected-value-info"></span></h5>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="number" id="ouFourthPlaceGFLine" step="0.5" class="p-1 border rounded w-24 text-xs" placeholder="e.g., 2.5">
-                        <button onclick="calculateSingleOverUnder('fourthPlaceGFSims', 'ouFourthPlaceGFLine', 'ouFourthPlaceGFResult')" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs">Calc O/U</button>
-                    </div>
                     <div id="ouFourthPlaceGFResult" class="text-xs"></div>
                 </div>
             </div>
@@ -231,6 +211,9 @@
                     <select id="simTeamSelect" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" disabled>
                         <option value="">-- Select Group First --</option>
                     </select>
+                </div>
+                <div>
+                    <button id="generateCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out mt-6" disabled>Generate Team CSV</button>
                 </div>
             </div>
             <div id="customProbInputsContainer" class="hidden">
@@ -291,6 +274,7 @@
         const simCustomValue1El = document.getElementById('simCustomValue1'), simCustomValue2El = document.getElementById('simCustomValue2');
         const calculateCustomProbAndOddButtonEl = document.getElementById('calculateCustomProbAndOddButton');
         const customProbAndOddResultAreaEl = document.getElementById('customProbAndOddResultArea');
+        const generateCsvButtonEl = document.getElementById('generateCsvButton');
 
         // --- CSV File Input ---
         csvFileInputEl.addEventListener('change', (event) => {
@@ -707,24 +691,26 @@
             } else { 
                 simTeamSelectEl.disabled = true; 
             }
-            document.getElementById('ouTotalGroupGoalsLine').value = ''; document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
+            document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
             document.getElementById('expectedTotalGroupGoals').textContent = '';
-            document.getElementById('ouFirstPlacePtsLine').value = ''; document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
             document.getElementById('expectedFirstPlacePts').textContent = '';
-            document.getElementById('ouFourthPlacePtsLine').value = ''; document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
             document.getElementById('expectedFourthPlacePts').textContent = '';
-            document.getElementById('ouFirstPlaceGFLine').value = ''; document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
+            document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
             document.getElementById('expectedFirstPlaceGF').textContent = '';
-            document.getElementById('ouFourthPlaceGFLine').value = ''; document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
+            document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
             document.getElementById('expectedFourthPlaceGF').textContent = '';
         });
 
         simTeamSelectEl.addEventListener('change', () => {
             if (simTeamSelectEl.value) {
                 customProbInputsContainerEl.classList.remove('hidden');
+                generateCsvButtonEl.disabled = false;
                 customProbAndOddResultAreaEl.innerHTML = "Define prop and click 'Calc Prop Odd'.";
             } else {
                 customProbInputsContainerEl.classList.add('hidden');
+                generateCsvButtonEl.disabled = true;
             }
         });
         
@@ -777,85 +763,43 @@
 
             calculatedOddsResultContentEl.innerHTML = html;
 
-            if (groupData.groupTotalGoalsSims && groupData.groupTotalGoalsSims.length > 0 && currentNumSims > 0) {
-                const avg = groupData.groupTotalGoalsSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                document.getElementById('expectedTotalGroupGoals').textContent = `(Avg: ${avg.toFixed(2)})`;
-            } else { document.getElementById('expectedTotalGroupGoals').textContent = ''; }
+            const displayAvgAndOU = (dataKey, expectedElId, resultElId) => {
+                const resultElement = document.getElementById(resultElId);
+                const expectedElement = document.getElementById(expectedElId);
+                if (groupData[dataKey] && groupData[dataKey].length > 0 && currentNumSims > 0) {
+                    const avg = groupData[dataKey].reduce((a, b) => a + b, 0) / currentNumSims;
+                    expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
 
-            if (groupData.firstPlacePtsSims && groupData.firstPlacePtsSims.length > 0 && currentNumSims > 0) {
-                const avg = groupData.firstPlacePtsSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                document.getElementById('expectedFirstPlacePts').textContent = `(Avg: ${avg.toFixed(2)})`;
-            } else { document.getElementById('expectedFirstPlacePts').textContent = ''; }
-            
-            if (groupData.fourthPlacePtsSims && groupData.fourthPlacePtsSims.length > 0 && currentNumSims > 0) {
-                const avg = groupData.fourthPlacePtsSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                document.getElementById('expectedFourthPlacePts').textContent = `(Avg: ${avg.toFixed(2)})`;
-            } else { document.getElementById('expectedFourthPlacePts').textContent = ''; }
+                    const centerLine = Math.round(avg) + 0.5;
+                    const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l > 0); // Ensure lines are positive
+                    let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
 
-            if (groupData.firstPlaceGFSims && groupData.firstPlaceGFSims.length > 0 && currentNumSims > 0) {
-                const avg = groupData.firstPlaceGFSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                document.getElementById('expectedFirstPlaceGF').textContent = `(Avg: ${avg.toFixed(2)})`;
-            } else { document.getElementById('expectedFirstPlaceGF').textContent = ''; }
+                    lines.forEach(line => {
+                         const overCount = groupData[dataKey].filter(val => val > line).length;
+                         const underCount = groupData[dataKey].filter(val => val < line).length;
+                         const probOver = overCount / currentNumSims;
+                         const probUnder = underCount / currentNumSims;
+                         const oddOver = calculateOddWithMargin(probOver, marginDecimal);
+                         const oddUnder = calculateOddWithMargin(probUnder, marginDecimal);
+                         ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td></tr>`;
+                    });
+                     ouHtml += `</tbody></table>`;
+                     resultElement.innerHTML = ouHtml;
 
-            if (groupData.fourthPlaceGFSims && groupData.fourthPlaceGFSims.length > 0 && currentNumSims > 0) {
-                const avg = groupData.fourthPlaceGFSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                document.getElementById('expectedFourthPlaceGF').textContent = `(Avg: ${avg.toFixed(2)})`;
-            } else { document.getElementById('expectedFourthPlaceGF').textContent = ''; }
+                } else {
+                     expectedElement.textContent = '';
+                     resultElement.innerHTML = '';
+                }
+            };
+
+            displayAvgAndOU('groupTotalGoalsSims', 'expectedTotalGroupGoals', 'ouTotalGroupGoalsResult');
+            displayAvgAndOU('firstPlacePtsSims', 'expectedFirstPlacePts', 'ouFirstPlacePtsResult');
+            displayAvgAndOU('fourthPlacePtsSims', 'expectedFourthPlacePts', 'ouFourthPlacePtsResult');
+            displayAvgAndOU('firstPlaceGFSims', 'expectedFirstPlaceGF', 'ouFirstPlaceGFResult');
+            displayAvgAndOU('fourthPlaceGFSims', 'expectedFourthPlaceGF', 'ouFourthPlaceGFResult');
         });
 
-        function calculateSingleOverUnder(dataKey, inputLineId, resultElementId) {
-            const selectedGroupKey = simGroupSelectEl.value;
-            const marginPercent = parseFloat(simBookieMarginEl.value);
-            const lineValue = parseFloat(document.getElementById(inputLineId).value);
-            const resultEl = document.getElementById(resultElementId);
-
-            resultEl.innerHTML = ""; 
-
-            if (!selectedGroupKey) { resultEl.innerHTML = '<p class="text-red-500">Select group.</p>'; return; }
-            if (isNaN(marginPercent) || marginPercent < 0) { resultEl.innerHTML = '<p class="text-red-500">Valid margin.</p>'; return; }
-            if (isNaN(lineValue)) { resultEl.innerHTML = '<p class="text-red-500">Valid line value.</p>'; return; }
-            
-            const groupData = simulationAggStats[selectedGroupKey];
-            
-            if (!groupData) {
-                resultEl.innerHTML = `<p class="text-gray-500">Error: No simulation data object found for group '${selectedGroupKey}'.</p>`;
-                return;
-            }
-
-            const simValues = groupData[dataKey];
-
-            if (simValues === undefined) {
-                resultEl.innerHTML = `<p class="text-gray-500">Error: Metric '${dataKey}' not found in data for group '${selectedGroupKey}'. Available keys: ${Object.keys(groupData).join(', ')}</p>`;
-                return;
-            }
-            if (!Array.isArray(simValues)) {
-                resultEl.innerHTML = `<p class="text-gray-500">Error: Metric '${dataKey}' is not an array for group '${selectedGroupKey}'. Type: ${typeof simValues}</p>`;
-                return;
-            }
-            if (currentNumSims === 0) {
-                 resultEl.innerHTML = `<p class="text-gray-500">Error: Number of simulations is zero. Please run simulation.</p>`;
-                 return;
-            }
-            if (simValues.length === 0 ) { 
-                resultEl.innerHTML = `<p class="text-gray-500">No simulation values recorded for metric '${dataKey}' (Array is empty, Sims: ${currentNumSims}).</p>`; 
-                return; 
-            }
-
-            const overCount = simValues.filter(val => val > lineValue).length;
-            const underCount = simValues.filter(val => val < lineValue).length;
-
-            const probOver = overCount / currentNumSims;
-            const probUnder = underCount / currentNumSims;
-            const marginDecimal = marginPercent / 100;
-
-            const oddOver = calculateOddWithMargin(probOver, marginDecimal);
-            const oddUnder = calculateOddWithMargin(probUnder, marginDecimal);
-
-            resultEl.innerHTML = `
-                P(Over ${lineValue}): ${(probOver * 100).toFixed(1)}% (Odd: ${oddOver})<br>
-                P(Under ${lineValue}): ${(probUnder * 100).toFixed(1)}% (Odd: ${oddUnder})
-            `;
-        }
+        function calculateSingleOverUnder(dataKey, inputLineId, resultElementId) { /* This function is no longer called from HTML, but can be kept for future use or removed */ }
 
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
@@ -917,16 +861,16 @@
             simulatedOddsStatusEl.textContent = "";
             customProbInputsContainerEl.classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = "Custom prop odds will appear here...";
-            // Clear O/U input fields and results
-            document.getElementById('ouTotalGroupGoalsLine').value = ''; document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
+            // Clear O/U sections
+            document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
             document.getElementById('expectedTotalGroupGoals').textContent = '';
-            document.getElementById('ouFirstPlacePtsLine').value = ''; document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
             document.getElementById('expectedFirstPlacePts').textContent = '';
-            document.getElementById('ouFourthPlacePtsLine').value = ''; document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
+            document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
             document.getElementById('expectedFourthPlacePts').textContent = '';
-            document.getElementById('ouFirstPlaceGFLine').value = ''; document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
+            document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
             document.getElementById('expectedFirstPlaceGF').textContent = '';
-            document.getElementById('ouFourthPlaceGFLine').value = ''; document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
+            document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
             document.getElementById('expectedFourthPlaceGF').textContent = '';
         });
 
@@ -949,6 +893,89 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             if (simCustomOperatorEl.value === 'between') simCustomValue2El.classList.remove('hidden');
             else simCustomValue2El.classList.add('hidden');
         });
+
+        generateCsvButtonEl.addEventListener('click', () => {
+            const groupKey = simGroupSelectEl.value;
+            const teamName = simTeamSelectEl.value;
+            const marginPercent = parseFloat(simBookieMarginEl.value);
+            const marginDecimal = marginPercent / 100;
+            
+            if (!groupKey || !teamName) {
+                alert("Please select a group and a team first.");
+                return;
+            }
+             if (isNaN(marginPercent) || marginPercent < 0) {
+                alert("Please enter a valid non-negative margin.");
+                return;
+            }
+
+            const teamData = simulationAggStats[groupKey]?.[teamName];
+            if (!teamData) {
+                alert("No simulation data found for the selected team.");
+                return;
+            }
+
+            let csvContent = "Date,Time,Market,Odd1,Odd2,Odd3\n";
+            const date = "15.6.2025";
+            const time = "02:00";
+            
+            const toCsvRow = (market, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}",${odd1},${odd2},${odd3}\n`;
+
+            const prob1st = (teamData.posCounts[0] || 0) / currentNumSims;
+            const odd1st = calculateOddWithMargin(prob1st, marginDecimal);
+            csvContent += toCsvRow("Pobednik grupe", odd1st);
+
+            const probQualify = ((teamData.posCounts[0] || 0) + (teamData.posCounts[1] || 0)) / currentNumSims;
+            const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
+            csvContent += toCsvRow("Prolazi grupu", oddQualify);
+
+            const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
+            const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
+            csvContent += toCsvRow("2. mesto u grupi", odd2nd);
+
+            const prob3rd = (teamData.posCounts[2] || 0) / currentNumSims;
+            const odd3rd = calculateOddWithMargin(prob3rd, marginDecimal);
+            csvContent += toCsvRow("3. mesto u grupi", odd3rd);
+
+            const prob4th = (teamData.posCounts[3] || 0) / currentNumSims;
+            const odd4th = calculateOddWithMargin(prob4th, marginDecimal);
+            csvContent += toCsvRow("4. mesto u grupi", odd4th);
+
+            const ptsSims = teamData.ptsSims;
+            [0,1,2,3,4,5,6,7,9].forEach(pts => {
+                const probPts = ptsSims.filter(p => p === pts).length / currentNumSims;
+                const oddPts = calculateOddWithMargin(probPts, marginDecimal);
+                csvContent += toCsvRow(`${pts} bodova u grupi`, oddPts);
+            });
+
+            const range1_3 = ptsSims.filter(p => p >= 1 && p <= 3).length / currentNumSims;
+            csvContent += toCsvRow("1-3 boda u grupi", calculateOddWithMargin(range1_3, marginDecimal));
+            const range2_4 = ptsSims.filter(p => p >= 2 && p <= 4).length / currentNumSims;
+            csvContent += toCsvRow("2-4 boda u grupi", calculateOddWithMargin(range2_4, marginDecimal));
+            const range4_6 = ptsSims.filter(p => p >= 4 && p <= 6).length / currentNumSims;
+            csvContent += toCsvRow("4-6 bodova u grupi", calculateOddWithMargin(range4_6, marginDecimal));
+            
+            [5.5, 6.5, 7.5].forEach(line => {
+                const overProb = ptsSims.filter(p => p > line).length / currentNumSims;
+                const underProb = ptsSims.filter(p => p < line).length / currentNumSims;
+                const overOdd = calculateOddWithMargin(overProb, marginDecimal);
+                const underOdd = calculateOddWithMargin(underProb, marginDecimal);
+                csvContent += toCsvRow(`Osvojenih bodova u grupi`, line, overOdd, underOdd);
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) { 
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `odds_${teamName.replace(/\s+/g, '_')}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+
     </script>
 </body>
 </html>
