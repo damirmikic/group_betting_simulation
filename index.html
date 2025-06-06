@@ -652,9 +652,6 @@
             for (const groupKey of sortedGroupKeys) {
                 const groupData = aggStats[groupKey]; if (!groupData) continue;
                 html += `<div class="mb-8 p-4 bg-white border border-gray-200 rounded-lg shadow"><h3 class="text-lg font-semibold text-indigo-600 mb-3">Group ${groupKey}</h3>`;
-                html += `<h4 class="font-medium text-gray-700 mb-1">Team Standings Probabilities:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','P(1st)','P(2nd)','P(3rd)','P(4th)','P(Adv.)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-                (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts)return; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td>${[ts.posCounts[0],ts.posCounts[1],ts.posCounts[2],ts.posCounts[3],ts.posCounts[0]+ts.posCounts[1]].map(c=>(numSims>0?c/numSims*100:0).toFixed(1)).map(p=>`<td class="px-2 py-2">${p}%</td>`).join('')}</tr>`;});
-                html += `</tbody></table>`;
                 html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Expected Team Stats:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','E(Pts)','E(GF)','E(GA)','P(Most GF)','P(Most GA)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
                 (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts||!ts.ptsSims)return; const avgPts=(ts.ptsSims.length>0&&numSims>0)?ts.ptsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGF=(ts.gfSims.length>0&&numSims>0)?ts.gfSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGA=(ts.gaSims.length>0&&numSims>0)?ts.gaSims.reduce((a,b)=>a+b,0)/numSims:0; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td><td class="px-2 py-2">${avgPts.toFixed(2)}</td><td class="px-2 py-2">${avgGF.toFixed(2)}</td><td class="px-2 py-2">${avgGA.toFixed(2)}</td><td class="px-2 py-2">${(numSims>0?ts.mostGFCount/numSims*100:0).toFixed(1)}%</td><td class="px-2 py-2">${(numSims>0?ts.mostGACount/numSims*100:0).toFixed(1)}%</td></tr>`;});
                 html += `</tbody></table>`;
@@ -736,14 +733,19 @@
             const marginDecimal = marginPercent / 100;
             let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Market Odds for Group ${selectedGroupKey} (Margin: ${marginPercent}%)</h3>`;
             
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Winner:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Win Grp)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?(tS.posCounts[0]||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team Standings Odds (1st/2nd/3rd/4th):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th><th>4th Place</th></tr></thead><tbody>`;
+            teams.forEach(tN=>{
+                html += `<tr><td class="font-medium">${tN}</td>`;
+                for(let i = 0; i < 4; i++) {
+                    const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?(tS.posCounts[i]||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);
+                    html += `<td>${o} <span class="text-gray-400">(${(tP*100).toFixed(1)}%)</span></td>`;
+                }
+                html += `</tr>`;
+            });
+            html+=`</tbody></table>`;
+
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?((tS.posCounts[0]||0)+(tS.posCounts[1]||0))/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGFCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Concede Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GA)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGACount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
             
             const allSF = Object.entries(groupData.straightForecasts || {}).sort(([, a], [, b]) => b - a);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">All Straight Forecasts (1st-2nd):</h4>`;
@@ -753,8 +755,6 @@
                 html += `</tbody></table>`;
             } else { html += `<p class="text-xs text-gray-500">No SF data.</p>`; }
 
-            const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-3 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4>`; if(topAD.length>0){html+=`<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pair</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;topAD.forEach(([k,c])=>{const tP=currentNumSims>0?c/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${k}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;}else{html+=`<p class="text-xs text-gray-500">No AD data.</p>`;}
-            
             const probAny9Pts = currentNumSims > 0 ? (groupData.anyTeam9PtsCount || 0) / currentNumSims : 0; const oddAny9Pts = calculateOddWithMargin(probAny9Pts, marginDecimal);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Specials:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Event</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
             html += `<tr><td>Any Team scores 9 Pts</td><td>${(probAny9Pts * 100).toFixed(1)}%</td><td>${oddAny9Pts}</td></tr>`;
