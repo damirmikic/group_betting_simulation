@@ -237,7 +237,10 @@
                  <div class="flex flex-wrap items-center gap-2 text-sm mb-4 p-3 bg-indigo-50 rounded-md">
                     <span class="font-medium">Calculate P(</span>
                     <select id="simCustomStatType" class="p-1 border rounded text-xs">
-                        <option value="ptsSims">Points</option><option value="gfSims">GF</option><option value="gaSims">GA</option>
+                        <option value="ptsSims">Points</option>
+                        <option value="winsSims">Wins</option>
+                        <option value="gfSims">GF</option>
+                        <option value="gaSims">GA</option>
                     </select>
                     <select id="simCustomOperator" class="p-1 border rounded text-xs">
                         <option value=">">&gt;</option><option value=">=">&ge;</option><option value="<">&lt;</option><option value="<=">&le;</option><option value="==">==</option><option value="between">Between</option>
@@ -575,7 +578,7 @@
                 }; 
                 (groupTeamNames[gr]||[]).forEach(tN=>{
                     aggStats[gr][tN]={
-                        posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[],
+                        posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [],
                         mostGFCount:0, mostGACount:0
                     };
                 });
@@ -587,7 +590,7 @@
                     if(tIG.length===0) continue; 
                     
                     const sTS={}; 
-                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0}); 
+                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0}); 
                     let cGTG=0;
             
                     cGMs.forEach(m=>{
@@ -596,13 +599,13 @@
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
                         cGTG+=(g1+g2); 
-                        if(g1>g2){if(sTS[m.team1])sTS[m.team1].pts+=3;}
-                        else if(g2>g1){if(sTS[m.team2])sTS[m.team2].pts+=3;}
+                        if(g1>g2){if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;}}
+                        else if(g2>g1){if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;}}
                         else{if(sTS[m.team1])sTS[m.team1].pts+=1;if(sTS[m.team2])sTS[m.team2].pts+=1;}
                     });
             
                     if(aggStats[gK]) aggStats[gK].groupTotalGoalsSims.push(cGTG); 
-                    const rTs=tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0};s.gd=s.gf-s.ga;return s;}).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||Math.random()-0.5);
+                    const rTs=tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||Math.random()-0.5);
             
                     let mGF=-1,mGA=-1; 
                     let groupHad9Pts=false, groupHad0Pts=false; 
@@ -628,7 +631,10 @@
                         const tA=aggStats[gK]?.[t.name]; 
                         if(tA){
                             if(rI<4)tA.posCounts[rI]++; 
-                            tA.ptsSims.push(t.pts);tA.gfSims.push(t.gf);tA.gaSims.push(t.ga); 
+                            tA.ptsSims.push(t.pts);
+                            tA.winsSims.push(t.wins || 0);
+                            tA.gfSims.push(t.gf);
+                            tA.gaSims.push(t.ga); 
                             if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
                         }
@@ -652,8 +658,8 @@
             for (const groupKey of sortedGroupKeys) {
                 const groupData = aggStats[groupKey]; if (!groupData) continue;
                 html += `<div class="mb-8 p-4 bg-white border border-gray-200 rounded-lg shadow"><h3 class="text-lg font-semibold text-indigo-600 mb-3">Group ${groupKey}</h3>`;
-                html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Expected Team Stats:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','E(Pts)','E(GF)','E(GA)','P(Most GF)','P(Most GA)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-                (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts||!ts.ptsSims)return; const avgPts=(ts.ptsSims.length>0&&numSims>0)?ts.ptsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGF=(ts.gfSims.length>0&&numSims>0)?ts.gfSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGA=(ts.gaSims.length>0&&numSims>0)?ts.gaSims.reduce((a,b)=>a+b,0)/numSims:0; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td><td class="px-2 py-2">${avgPts.toFixed(2)}</td><td class="px-2 py-2">${avgGF.toFixed(2)}</td><td class="px-2 py-2">${avgGA.toFixed(2)}</td><td class="px-2 py-2">${(numSims>0?ts.mostGFCount/numSims*100:0).toFixed(1)}%</td><td class="px-2 py-2">${(numSims>0?ts.mostGACount/numSims*100:0).toFixed(1)}%</td></tr>`;});
+                html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Expected Team Stats:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','E(Pts)','E(Wins)','E(GF)','E(GA)','P(Most GF)','P(Most GA)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+                (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts||!ts.ptsSims)return; const avgPts=(ts.ptsSims.length>0&&numSims>0)?ts.ptsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgWins=(ts.winsSims&&ts.winsSims.length>0&&numSims>0)?ts.winsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGF=(ts.gfSims.length>0&&numSims>0)?ts.gfSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGA=(ts.gaSims.length>0&&numSims>0)?ts.gaSims.reduce((a,b)=>a+b,0)/numSims:0; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td><td class="px-2 py-2">${avgPts.toFixed(2)}</td><td class="px-2 py-2">${avgWins.toFixed(2)}</td><td class="px-2 py-2">${avgGF.toFixed(2)}</td><td class="px-2 py-2">${avgGA.toFixed(2)}</td><td class="px-2 py-2">${(numSims>0?ts.mostGFCount/numSims*100:0).toFixed(1)}%</td><td class="px-2 py-2">${(numSims>0?ts.mostGACount/numSims*100:0).toFixed(1)}%</td></tr>`;});
                 html += `</tbody></table>`;
                 const avgGroupGoals = (groupData.groupTotalGoalsSims&&groupData.groupTotalGoalsSims.length>0&&numSims>0)?groupData.groupTotalGoalsSims.reduce((a,b)=>a+b,0)/numSims:0;
                 html += `<p class="mt-2 text-sm"><strong>Expected Total Goals in Group ${groupKey}:</strong> ${avgGroupGoals.toFixed(2)}</p>`;
@@ -743,10 +749,16 @@
                 html += `</tr>`;
             });
             html+=`</tbody></table>`;
-
+            
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?((tS.posCounts[0]||0)+(tS.posCounts[1]||0))/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
+            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGFCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
             
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Concede Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GA)</th><th>Odd</th></tr></thead><tbody>`;
+            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGACount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+
             const allSF = Object.entries(groupData.straightForecasts || {}).sort(([, a], [, b]) => b - a);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">All Straight Forecasts (1st-2nd):</h4>`;
             if (allSF.length > 0) {
@@ -755,6 +767,8 @@
                 html += `</tbody></table>`;
             } else { html += `<p class="text-xs text-gray-500">No SF data.</p>`; }
 
+            const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-3 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4>`; if(topAD.length>0){html+=`<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pair</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;topAD.forEach(([k,c])=>{const tP=currentNumSims>0?c/currentNumSims:0,o=calculateOddWithMargin(tP,marginDecimal);html+=`<tr><td>${k}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;}else{html+=`<p class="text-xs text-gray-500">No AD data.</p>`;}
+            
             const probAny9Pts = currentNumSims > 0 ? (groupData.anyTeam9PtsCount || 0) / currentNumSims : 0; const oddAny9Pts = calculateOddWithMargin(probAny9Pts, marginDecimal);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Specials:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Event</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
             html += `<tr><td>Any Team scores 9 Pts</td><td>${(probAny9Pts * 100).toFixed(1)}%</td><td>${oddAny9Pts}</td></tr>`;
