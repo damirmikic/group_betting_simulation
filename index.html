@@ -598,7 +598,11 @@
                     });
             
                     if(aggStats[gK]) aggStats[gK].groupTotalGoalsSims.push(cGTG); 
-                    const rTs=tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||Math.random()-0.5);
+                    const rTs=tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}).sort((a,b)=>{
+                        const scoreA = a.pts + (a.gd / 100) + (a.gf / 1000) + (Math.random() / 10000);
+                        const scoreB = b.pts + (b.gd / 100) + (b.gf / 1000) + (Math.random() / 10000);
+                        return scoreB - scoreA;
+                    });
             
                     let mGF=-1,mGA=-1; 
                     let groupHad9Pts=false, groupHad0Pts=false; 
