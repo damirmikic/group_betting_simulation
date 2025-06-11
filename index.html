@@ -241,7 +241,6 @@
                 </div>
             </div>
 
-
             <hr class="my-6">
             <h3 id="custom-props-title" class="text-lg font-semibold text-gray-700 mb-3">Custom Team Prop Odds</h3>
              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -255,12 +254,33 @@
                     <button id="generateTeamCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out mt-6" disabled>Generate Team CSV</button>
                 </div>
             </div>
+            
+            <div id="teamSpecificOddsContainer" class="hidden">
+                 <div id="teamUnbeatenMarket" class="mb-4"></div>
+                 <div id="teamOverUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="over-under-section">
+                        <h5><span id="ou-wins-title">Total Wins O/U</span> <span id="expectedWins" class="expected-value-info"></span></h5>
+                        <div id="ouWinsResult" class="text-xs"></div>
+                    </div>
+                    <div class="over-under-section">
+                        <h5><span id="ou-draws-title">Total Draws O/U</span> <span id="expectedDraws" class="expected-value-info"></span></h5>
+                        <div id="ouDrawsResult" class="text-xs"></div>
+                    </div>
+                     <div class="over-under-section">
+                        <h5><span id="ou-losses-title">Total Losses O/U</span> <span id="expectedLosses" class="expected-value-info"></span></h5>
+                        <div id="ouLossesResult" class="text-xs"></div>
+                    </div>
+                </div>
+            </div>
+            
             <div id="customProbInputsContainer" class="hidden">
                  <div class="flex flex-wrap items-center gap-2 text-sm mb-4 p-3 bg-indigo-50 rounded-md">
                     <span id="calc-prob-prefix" class="font-medium">Calculate P(</span>
                     <select id="simCustomStatType" class="p-1 border rounded text-xs">
                         <option value="ptsSims">Points</option>
                         <option value="winsSims">Wins</option>
+                        <option value="drawsSims">Draws</option>
+                        <option value="lossesSims">Losses</option>
                         <option value="gfSims">GF</option>
                         <option value="gaSims">GA</option>
                     </select>
@@ -318,6 +338,10 @@
                 'ou-btts-title': 'Number of BTTS Matches O/U',
                 'ou-over25-title': 'Number of Over 2.5 Matches O/U',
                 'ou-zerozero-title': 'Number of 0-0 Matches O/U',
+                'ou-wins-title': 'Total Wins O/U',
+                'ou-draws-title': 'Total Draws O/U',
+                'ou-losses-title': 'Total Losses O/U',
+                'team-unbeaten-title': 'Team to Go Unbeaten in Group',
                 'custom-props-title': 'Custom Team Prop Odds',
                 'select-team-label': 'Select Team (from chosen group):',
                 'select-group-first-option': '-- Select Group First --',
@@ -382,6 +406,10 @@
                 'ou-btts-title': 'Broj GG Mečeva V/M',
                 'ou-over25-title': 'Broj 3+ Mečeva V/M',
                 'ou-zerozero-title': 'Broj 0-0 Mečeva V/M',
+                'ou-wins-title': 'Ukupno Pobeda V/M',
+                'ou-draws-title': 'Ukupno Nerešenih V/M',
+                'ou-losses-title': 'Ukupno Poraza V/M',
+                'team-unbeaten-title': 'Tim bez poraza u grupi',
                 'custom-props-title': 'Prilagođene Kvote za Tim',
                 'select-team-label': 'Izaberi Tim (iz izabrane grupe):',
                 'select-group-first-option': '-- Prvo Izaberi Grupu --',
@@ -829,7 +857,7 @@
             const aggStats={}; 
             for(const gr in groupedMatches){ 
                 aggStats[gr]={ groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, anyTeam9PtsCount:0, anyTeam0PtsCount:0, firstPlacePtsSims:[], firstPlaceGFSims:[], fourthPlacePtsSims:[], fourthPlaceGFSims:[], bttsCountSims: [], over25CountSims: [], zeroZeroCountSims: [] }; 
-                (groupTeamNames[gr]||[]).forEach(tN=>{ aggStats[gr][tN]={ posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [], mostGFCount:0, mostGACount:0 }; });
+                (groupTeamNames[gr]||[]).forEach(tN=>{ aggStats[gr][tN]={ posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [], drawsSims: [], lossesSims: [], unbeatenCount: 0, mostGFCount:0, mostGACount:0 }; });
             }
             for(let i=0; i<numSims; i++){ 
                 for(const gK in groupedMatches){ 
@@ -838,7 +866,7 @@
                     if(tIG.length===0) continue; 
                     
                     const sTS={}; 
-                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0}); 
+                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0, draws: 0, losses: 0}); 
                     let cGTG=0;
                     let bttsCount = 0, over25Count = 0, zeroZeroCount = 0;
                     const currentSimMatchResults = [];
@@ -864,9 +892,18 @@
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
                         cGTG+=(g1+g2); 
-                        if(g1>g2){if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;}}
-                        else if(g2>g1){if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;}}
-                        else{if(sTS[m.team1])sTS[m.team1].pts+=1;if(sTS[m.team2])sTS[m.team2].pts+=1;}
+                        if(g1>g2){
+                            if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;}
+                            if(sTS[m.team2]){sTS[m.team2].losses+=1;}
+                        }
+                        else if(g2>g1){
+                            if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;}
+                             if(sTS[m.team1]){sTS[m.team1].losses+=1;}
+                        }
+                        else{
+                            if(sTS[m.team1]){sTS[m.team1].pts+=1; sTS[m.team1].draws+=1;}
+                            if(sTS[m.team2]){sTS[m.team2].pts+=1; sTS[m.team2].draws+=1;}
+                        }
                     });
             
                     if(aggStats[gK]) {
@@ -877,7 +914,7 @@
                     }
                     
                     const groupStandings = tIG.map(tN => {
-                        const s = sTS[tN] || { name: tN, pts: 0, gf: 0, ga: 0, gd: 0, wins: 0 };
+                        const s = sTS[tN] || { name: tN, pts: 0, gf: 0, ga: 0, gd: 0, wins: 0, draws: 0, losses: 0 };
                         s.gd = s.gf - s.ga;
                         return s;
                     });
@@ -898,8 +935,18 @@
                     rTs.forEach((t,rI)=>{
                         const tA=aggStats[gK]?.[t.name]; 
                         if(tA){
-                            if(rI<4)tA.posCounts[rI]++; tA.ptsSims.push(t.pts); tA.winsSims.push(t.wins || 0); tA.gfSims.push(t.gf); tA.gaSims.push(t.ga); 
-                            if(t.gf===mGF&&mGF>0)tA.mostGFCount++; if(t.ga===mGA&&mGA>0)tA.mostGACount++;
+                            if(rI<4)tA.posCounts[rI]++; 
+                            tA.ptsSims.push(t.pts); 
+                            tA.winsSims.push(t.wins);
+                            tA.drawsSims.push(t.draws);
+                            tA.lossesSims.push(t.losses);
+                            if (t.losses === 0) {
+                                tA.unbeatenCount++;
+                            }
+                            tA.gfSims.push(t.gf); 
+                            tA.gaSims.push(t.ga); 
+                            if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
+                            if(t.ga===mGA&&mGA>0)tA.mostGACount++;
                         }
                     });
             
@@ -936,20 +983,23 @@
         }
         
         // --- Simulated Group Odds Tab Logic ---
-        function calculateOddWithMargin(trueProb, marginDec) {
+        function calculateOddWithMargin(trueProb, marginPercent) {
              if (trueProb <= 0) return "N/A";
-             // This formula correctly shortens the odds.
-             // It converts the true probability into the bookmaker's probability by adding the margin,
-             // and then calculates the odd from that.
-             const bookmakerProb = trueProb * (1 + marginDec);
+             const marginFactor = 1 + (marginPercent / 100);
+             //This formula correctly shortens the odds.
+             const bookmakerProb = trueProb / (1-marginPercent/100) ;
+             if (bookmakerProb > 1) { 
+                 return (1 / trueProb).toFixed(2);
+             }
              return (1 / bookmakerProb).toFixed(2);
         }
         
         function populateSimGroupSelect() {
+            const currentGroup = simGroupSelectEl.value;
+            const currentTeam = simTeamSelectEl.value;
+
             simGroupSelectEl.innerHTML = `<option value="">${translations[currentLanguage]['select-group-option']}</option>`; 
-            simTeamSelectEl.innerHTML = `<option value="">${translations[currentLanguage]['select-group-first-option']}</option>`; 
-            simTeamSelectEl.disabled = true; 
-            customProbInputsContainerEl.classList.add('hidden');
+            
             if (Object.keys(simulationAggStats).length > 0) { 
                 Object.keys(simulationAggStats).sort().forEach(groupKey => { 
                     const option = document.createElement('option'); 
@@ -957,15 +1007,58 @@
                     option.textContent = `Group ${groupKey}`; 
                     simGroupSelectEl.appendChild(option); 
                 });
+                simGroupSelectEl.value = currentGroup; // Preserve selection
             } else { 
                  simGroupSelectEl.innerHTML = `<option value="">${translations[currentLanguage]['run-sim-first-option']}</option>`;
             }
+            
+            // Trigger change to repopulate team select if group is still valid
+            const event = new Event('change');
+            simGroupSelectEl.dispatchEvent(event);
+            simTeamSelectEl.value = currentTeam;
+            simTeamSelectEl.dispatchEvent(event);
         }
+
+        // *** FIX START ***
+        // Moved this function to the global scope so it can be called from multiple places.
+        const displayAvgAndOU = (dataSims, expectedElId, resultElId) => {
+            const resultElement = document.getElementById(resultElId);
+            const expectedElement = document.getElementById(expectedElId);
+            const ouMarginPercent = parseFloat(document.getElementById('ouBookieMargin').value)
+            if (isNaN(ouMarginPercent) || ouMarginPercent < 0) return;
+            
+            if (dataSims && dataSims.length > 0 && currentNumSims > 0) {
+                const avg = dataSims.reduce((a, b) => a + b, 0) / currentNumSims;
+                expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
+
+                const centerLine = Math.floor(avg) + 0.5;
+                const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l >= 0.5); 
+                let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
+
+                lines.forEach(line => {
+                     const overCount = dataSims.filter(val => val > line).length;
+                     const underCount = dataSims.filter(val => val < line).length;
+                     const probOver = overCount / currentNumSims;
+                     const probUnder = underCount / currentNumSims;
+                     const oddOver = calculateOddWithMargin(probOver, ouMarginPercent);
+                     const oddUnder = calculateOddWithMargin(probUnder, ouMarginPercent);
+                     ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td></tr>`;
+                });
+                 ouHtml += `</tbody></table>`;
+                 resultElement.innerHTML = ouHtml;
+
+            } else {
+                 if(expectedElement) expectedElement.textContent = '';
+                 if(resultElement) resultElement.innerHTML = '';
+            }
+        };
+        // *** FIX END ***
 
         simGroupSelectEl.addEventListener('change', () => {
             const selectedGroupKey = simGroupSelectEl.value;
             simTeamSelectEl.innerHTML = `<option value="">${translations[currentLanguage]['select-team-option']}</option>`;
             customProbInputsContainerEl.classList.add('hidden'); 
+            document.getElementById('teamSpecificOddsContainer').classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = translations[currentLanguage]['custom-odds-placeholder'];
 
             if (selectedGroupKey && groupTeamNames[selectedGroupKey]) {
@@ -988,15 +1081,44 @@
         });
 
         simTeamSelectEl.addEventListener('change', () => {
-            if (simTeamSelectEl.value) {
+             const groupKey = simGroupSelectEl.value;
+             const teamName = simTeamSelectEl.value;
+             const teamSpecificContainer = document.getElementById('teamSpecificOddsContainer');
+             
+            if (teamName && groupKey && simulationAggStats[groupKey]) {
                 customProbInputsContainerEl.classList.remove('hidden');
                 generateTeamCsvButtonEl.disabled = false;
+                teamSpecificContainer.classList.remove('hidden');
+                displayTeamSpecificOdds(groupKey, teamName);
                 customProbAndOddResultAreaEl.innerHTML = "Define prop and click 'Calc Prop Odd'.";
             } else {
                 customProbInputsContainerEl.classList.add('hidden');
                 generateTeamCsvButtonEl.disabled = true;
+                teamSpecificContainer.classList.add('hidden');
             }
         });
+
+        function displayTeamSpecificOdds(groupKey, teamName) {
+            const teamData = simulationAggStats[groupKey]?.[teamName];
+            if (!teamData) return;
+
+            const marginPercent = parseFloat(simBookieMarginEl.value);
+
+            // Unbeaten market
+            const probUnbeaten = (teamData.unbeatenCount || 0) / currentNumSims;
+            const oddUnbeaten = calculateOddWithMargin(probUnbeaten, marginPercent);
+            document.getElementById('teamUnbeatenMarket').innerHTML = `
+                 <h4 class="font-medium text-gray-700 mt-3 mb-1">${translations[currentLanguage]['team-unbeaten-title']}</h4>
+                 <table class="odds-table text-xs sm:text-sm">
+                    <thead><tr><th>Team</th><th>Prob</th><th>Odd</th></tr></thead>
+                    <tbody><tr><td>${teamName}</td><td>${(probUnbeaten * 100).toFixed(1)}%</td><td>${oddUnbeaten}</td></tr></tbody>
+                 </table>`;
+            
+            // W/D/L O/U Markets
+            displayAvgAndOU(teamData.winsSims, 'expectedWins', 'ouWinsResult');
+            displayAvgAndOU(teamData.drawsSims, 'expectedDraws', 'ouDrawsResult');
+            displayAvgAndOU(teamData.lossesSims, 'expectedLosses', 'ouLossesResult');
+        }
         
         showSimulatedOddsButtonEl.addEventListener('click', () => { 
             const selectedGroupKey = simGroupSelectEl.value;
@@ -1012,14 +1134,13 @@
             const groupData = simulationAggStats[selectedGroupKey], teams = groupTeamNames[selectedGroupKey] || [];
             if (!groupData || teams.length === 0) { simulatedOddsStatusEl.textContent = "Group data incomplete."; return; }
             
-            const mainMarginDecimal = mainMarginPercent / 100;
             let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Market Odds for Group ${selectedGroupKey} (Margin: ${mainMarginPercent}%)</h3>`;
             
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team Standings Odds (1st/2nd/3rd/4th):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th><th>4th Place</th></tr></thead><tbody>`;
             teams.sort().forEach(tN=>{
                 html += `<tr><td class="font-medium">${tN}</td>`;
                 for(let i = 0; i < 4; i++) {
-                    const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?(tS.posCounts[i]||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);
+                    const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?(tS.posCounts[i]||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);
                     html += `<td>${o} <span class="text-gray-400">(${(tP*100).toFixed(1)}%)</span></td>`;
                 }
                 html += `</tr>`;
@@ -1027,73 +1148,40 @@
             html+=`</tbody></table>`;
             
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?((tS.posCounts[0]||0)+(tS.posCounts[1]||0))/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?((tS.posCounts[0]||0)+(tS.posCounts[1]||0))/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
 
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGFCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGFCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
             
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Concede Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GA)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGACount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+            teams.sort().forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGACount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
 
             const allSF = Object.entries(groupData.straightForecasts || {}).sort(([, a], [, b]) => b - a);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">All Straight Forecasts (1st-2nd):</h4>`;
             if (allSF.length > 0) {
                 html += `<table class="odds-table text-xs sm:text-sm max-h-60 overflow-y-auto block"><thead><tr><th>Forecast</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-                allSF.forEach(([k, c]) => { const tP = currentNumSims > 0 ? c / currentNumSims : 0, o = calculateOddWithMargin(tP, mainMarginDecimal); html += `<tr><td>${k}</td><td>${(tP * 100).toFixed(1)}%</td><td>${o}</td></tr>`; });
+                allSF.forEach(([k, c]) => { const tP = currentNumSims > 0 ? c / currentNumSims : 0, o = calculateOddWithMargin(tP, mainMarginPercent); html += `<tr><td>${k}</td><td>${(tP * 100).toFixed(1)}%</td><td>${o}</td></tr>`; });
                 html += `</tbody></table>`;
             } else { html += `<p class="text-xs text-gray-500">No SF data.</p>`; }
 
-            const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-3 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4>`; if(topAD.length>0){html+=`<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pair</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;topAD.forEach(([k,c])=>{const tP=currentNumSims>0?c/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${k}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;}else{html+=`<p class="text-xs text-gray-500">No AD data.</p>`;}
+            const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-3 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4>`; if(topAD.length>0){html+=`<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Pair</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;topAD.forEach(([k,c])=>{const tP=currentNumSims>0?c/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);html+=`<tr><td>${k}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;}else{html+=`<p class="text-xs text-gray-500">No AD data.</p>`;}
             
-            const probAny9Pts = currentNumSims > 0 ? (groupData.anyTeam9PtsCount || 0) / currentNumSims : 0; const oddAny9Pts = calculateOddWithMargin(probAny9Pts, mainMarginDecimal);
+            const probAny9Pts = currentNumSims > 0 ? (groupData.anyTeam9PtsCount || 0) / currentNumSims : 0; const oddAny9Pts = calculateOddWithMargin(probAny9Pts, mainMarginPercent);
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Specials:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Event</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
             html += `<tr><td>Any Team scores 9 Pts</td><td>${(probAny9Pts * 100).toFixed(1)}%</td><td>${oddAny9Pts}</td></tr>`;
-            const probAny0Pts = currentNumSims > 0 ? (groupData.anyTeam0PtsCount || 0) / currentNumSims : 0; const oddAny0Pts = calculateOddWithMargin(probAny0Pts, mainMarginDecimal);
+            const probAny0Pts = currentNumSims > 0 ? (groupData.anyTeam0PtsCount || 0) / currentNumSims : 0; const oddAny0Pts = calculateOddWithMargin(probAny0Pts, mainMarginPercent);
             html += `<tr><td>Any Team scores 0 Pts</td><td>${(probAny0Pts * 100).toFixed(1)}%</td><td>${oddAny0Pts}</td></tr></tbody></table>`;
 
             calculatedOddsResultContentEl.innerHTML = html;
 
-            const displayAvgAndOU = (dataKey, expectedElId, resultElId) => {
-                const resultElement = document.getElementById(resultElId);
-                const expectedElement = document.getElementById(expectedElId);
-                const ouMarginPercent = parseFloat(document.getElementById('ouBookieMargin').value)
-                if (isNaN(ouMarginPercent) || ouMarginPercent < 0) return;
-                const ouMarginDecimal = ouMarginPercent / 100;
-
-                if (groupData[dataKey] && groupData[dataKey].length > 0 && currentNumSims > 0) {
-                    const avg = groupData[dataKey].reduce((a, b) => a + b, 0) / currentNumSims;
-                    expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
-
-                    const centerLine = Math.floor(avg) + 0.5;
-                    const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l >= 0.5); 
-                    let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
-
-                    lines.forEach(line => {
-                         const overCount = groupData[dataKey].filter(val => val > line).length;
-                         const underCount = groupData[dataKey].filter(val => val < line).length;
-                         const probOver = overCount / currentNumSims;
-                         const probUnder = underCount / currentNumSims;
-                         const oddOver = calculateOddWithMargin(probOver, ouMarginDecimal);
-                         const oddUnder = calculateOddWithMargin(probUnder, ouMarginDecimal);
-                         ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td></tr>`;
-                    });
-                     ouHtml += `</tbody></table>`;
-                     resultElement.innerHTML = ouHtml;
-
-                } else {
-                     expectedElement.textContent = '';
-                     resultElement.innerHTML = '';
-                }
-            };
-
-            displayAvgAndOU('groupTotalGoalsSims', 'expectedTotalGroupGoals', 'ouTotalGroupGoalsResult');
-            displayAvgAndOU('firstPlacePtsSims', 'expectedFirstPlacePts', 'ouFirstPlacePtsResult');
-            displayAvgAndOU('fourthPlacePtsSims', 'expectedFourthPlacePts', 'ouFourthPlacePtsResult');
-            displayAvgAndOU('firstPlaceGFSims', 'expectedFirstPlaceGF', 'ouFirstPlaceGFResult');
-            displayAvgAndOU('fourthPlaceGFSims', 'expectedFourthPlaceGF', 'ouFourthPlaceGFResult');
-            displayAvgAndOU('bttsCountSims', 'expectedBttsMatches', 'ouBttsMatchesResult');
-            displayAvgAndOU('over25CountSims', 'expectedOver25Matches', 'ouOver25MatchesResult');
-            displayAvgAndOU('zeroZeroCountSims', 'expectedZeroZeroMatches', 'ouZeroZeroMatchesResult');
+            displayAvgAndOU(groupData.groupTotalGoalsSims, 'expectedTotalGroupGoals', 'ouTotalGroupGoalsResult');
+            displayAvgAndOU(groupData.firstPlacePtsSims, 'expectedFirstPlacePts', 'ouFirstPlacePtsResult');
+            displayAvgAndOU(groupData.fourthPlacePtsSims, 'expectedFourthPlacePts', 'ouFourthPlacePtsResult');
+            displayAvgAndOU(groupData.firstPlaceGFSims, 'expectedFirstPlaceGF', 'ouFirstPlaceGFResult');
+            displayAvgAndOU(groupData.fourthPlaceGFSims, 'expectedFourthPlaceGF', 'ouFourthPlaceGFResult');
+            displayAvgAndOU(groupData.bttsCountSims, 'expectedBttsMatches', 'ouBttsMatchesResult');
+            displayAvgAndOU(groupData.over25CountSims, 'expectedOver25Matches', 'ouOver25MatchesResult');
+            displayAvgAndOU(groupData.zeroZeroCountSims, 'expectedZeroZeroMatches', 'ouZeroZeroMatchesResult');
         });
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
@@ -1132,8 +1220,7 @@
             });
             
             const trueProbability = metConditionCount / currentNumSims;
-            const marginDecimal = marginPercent / 100;
-            const odd = calculateOddWithMargin(trueProbability, marginDecimal);
+            const odd = calculateOddWithMargin(trueProbability, marginPercent);
 
             let propDescription = `${teamName} ${statType.replace('Sims','')} ${operator} ${value1}`;
             if (operator === 'between') propDescription += ` and ${value2}`;
@@ -1161,6 +1248,7 @@
             calculatedOddsResultContentEl.innerHTML = translations[currentLanguage]['odds-results-placeholder'];
             simulatedOddsStatusEl.textContent = "";
             customProbInputsContainerEl.classList.add('hidden');
+            document.getElementById('teamSpecificOddsContainer').classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = translations[currentLanguage]['custom-odds-placeholder'];
              ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
                  const el = document.getElementById(id);
@@ -1213,16 +1301,16 @@
             const date = "15.6.2025"; const time = "02:00";
             const toCsvRow = (market, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}",${odd1},${odd2},${odd3}\n`;
 
-            csvContent += toCsvRow(translations[lang]['csv-group-winner'], calculateOddWithMargin((teamData.posCounts[0] || 0) / currentNumSims, marginDecimal));
-            csvContent += toCsvRow(translations[lang]['csv-qualify'], calculateOddWithMargin(((teamData.posCounts[0] || 0) + (teamData.posCounts[1] || 0)) / currentNumSims, marginDecimal));
+            csvContent += toCsvRow(translations[lang]['csv-group-winner'], calculateOddWithMargin((teamData.posCounts[0] || 0) / currentNumSims, marginPercent));
+            csvContent += toCsvRow(translations[lang]['csv-qualify'], calculateOddWithMargin(((teamData.posCounts[0] || 0) + (teamData.posCounts[1] || 0)) / currentNumSims, marginPercent));
             [1, 2, 3].forEach(i => {
-                csvContent += toCsvRow(`${i+1}. ${translations[lang]['csv-2nd'].split(' ')[1]} u grupi`, calculateOddWithMargin((teamData.posCounts[i] || 0) / currentNumSims, marginDecimal));
+                csvContent += toCsvRow(`${i+1}. ${translations[lang]['csv-2nd'].split(' ')[1]} u grupi`, calculateOddWithMargin((teamData.posCounts[i] || 0) / currentNumSims, marginPercent));
             });
 
             const ptsSims = teamData.ptsSims;
             [0,1,2,3,4,5,6,7,9].forEach(pts => {
                 const probPts = ptsSims.filter(p => p === pts).length / currentNumSims;
-                csvContent += toCsvRow(`${pts} ${translations[lang]['csv-pts-in-group']}`, calculateOddWithMargin(probPts, marginDecimal));
+                csvContent += toCsvRow(`${pts} ${translations[lang]['csv-pts-in-group']}`, calculateOddWithMargin(probPts, marginPercent));
             });
 
             [
@@ -1231,13 +1319,13 @@
                 {label: 'csv-pts-range-4-6', filter: p => p >= 4 && p <= 6}
             ].forEach(range => {
                 const prob = ptsSims.filter(range.filter).length / currentNumSims;
-                csvContent += toCsvRow(translations[lang][range.label], calculateOddWithMargin(prob, marginDecimal));
+                csvContent += toCsvRow(translations[lang][range.label], calculateOddWithMargin(prob, marginPercent));
             });
             
             [5.5, 6.5, 7.5].forEach(line => {
                 const overProb = ptsSims.filter(p => p > line).length / currentNumSims;
                 const underProb = ptsSims.filter(p => p < line).length / currentNumSims;
-                csvContent += toCsvRow(translations[lang]['csv-total-pts'], line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
+                csvContent += toCsvRow(translations[lang]['csv-total-pts'], line, calculateOddWithMargin(overProb, marginPercent), calculateOddWithMargin(underProb, marginPercent));
             });
             downloadCSV(csvContent, `odds_${teamName.replace(/\s+/g, '_')}_${lang}.csv`);
         });
@@ -1259,7 +1347,7 @@
             const date = "15.6.2025"; const time = "02:00";
             const toCsvRow = (market, submarket, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}","${submarket}",${odd1},${odd2},${odd3}\n`;
             
-            const addSpecial = (market, submarket, prob) => csvContent += toCsvRow(market, submarket, calculateOddWithMargin(prob, marginDecimal));
+            const addSpecial = (market, submarket, prob) => csvContent += toCsvRow(market, submarket, calculateOddWithMargin(prob, marginPercent));
             addSpecial(translations[lang]['csv-any-team'], translations[lang]['csv-9-pts'], (groupData.anyTeam9PtsCount || 0) / currentNumSims);
             addSpecial(translations[lang]['csv-any-team'], translations[lang]['csv-0-pts'], (groupData.anyTeam0PtsCount || 0) / currentNumSims);
 
@@ -1268,7 +1356,7 @@
                     lines.forEach(line => {
                         const overProb = sims.filter(p => p > line).length / currentNumSims;
                         const underProb = sims.filter(p => p < line).length / currentNumSims;
-                        csvContent += toCsvRow(translations[lang]['csv-total-pts-h'], translations[lang][submarketKey], line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
+                        csvContent += toCsvRow(translations[lang]['csv-total-pts-h'], translations[lang][submarketKey], line, calculateOddWithMargin(overProb, marginPercent), calculateOddWithMargin(underProb, marginPercent));
                     });
                 }
             };
@@ -1278,7 +1366,7 @@
             const processEntries = (entries, marketFn, submarketKey) => {
                  entries.sort(([,a],[,b])=>b-a).forEach(([key, count]) => {
                     const prob = count / currentNumSims;
-                    csvContent += toCsvRow(marketFn(key), translations[lang][submarketKey], calculateOddWithMargin(prob, marginDecimal));
+                    csvContent += toCsvRow(marketFn(key), translations[lang][submarketKey], calculateOddWithMargin(prob, marginPercent));
                 });
             };
             processEntries(Object.entries(groupData.straightForecasts || {}), k => k.replace('(1st)', '').replace('(2nd)', '').replace('-', '/'), 'csv-s-forecast');
@@ -1286,7 +1374,7 @@
 
             teams.forEach(team => {
                 const prob = (groupData[team].posCounts[0] || 0) / currentNumSims;
-                csvContent += toCsvRow(team, translations[lang]['csv-group-winner'], calculateOddWithMargin(prob, marginDecimal));
+                csvContent += toCsvRow(team, translations[lang]['csv-group-winner'], calculateOddWithMargin(prob, marginPercent));
             });
             downloadCSV(csvContent, `group_odds_${groupKey}_${lang}.csv`);
         });
