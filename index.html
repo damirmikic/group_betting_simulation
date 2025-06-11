@@ -206,7 +206,7 @@
                  <label for="ouBookieMargin" id="ou-margin-label" class="block text-sm font-medium text-gray-700 mb-1">Over/Under Specific Margin (%):</label>
                  <input type="number" id="ouBookieMargin" step="0.1" min="0" value="5" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5 for 5%">
             </div>
-            <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div class="over-under-section">
                     <h5><span id="ou-group-goals-title">Total Group Goals O/U</span> <span id="expectedTotalGroupGoals" class="expected-value-info"></span></h5>
                     <div id="ouTotalGroupGoalsResult" class="text-xs"></div>
@@ -226,6 +226,18 @@
                 <div class="over-under-section">
                     <h5><span id="ou-4th-gf-title">Goals For by 4th Placed Team O/U</span> <span id="expectedFourthPlaceGF" class="expected-value-info"></span></h5>
                     <div id="ouFourthPlaceGFResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5><span id="ou-btts-title">Number of BTTS Matches O/U</span> <span id="expectedBttsMatches" class="expected-value-info"></span></h5>
+                    <div id="ouBttsMatchesResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5><span id="ou-over25-title">Number of Over 2.5 Matches O/U</span> <span id="expectedOver25Matches" class="expected-value-info"></span></h5>
+                    <div id="ouOver25MatchesResult" class="text-xs"></div>
+                </div>
+                <div class="over-under-section">
+                    <h5><span id="ou-zerozero-title">Number of 0-0 Matches O/U</span> <span id="expectedZeroZeroMatches" class="expected-value-info"></span></h5>
+                    <div id="ouZeroZeroMatchesResult" class="text-xs"></div>
                 </div>
             </div>
 
@@ -303,6 +315,9 @@
                 'ou-4th-pts-title': 'Points of 4th Placed Team O/U',
                 'ou-1st-gf-title': 'Goals For by 1st Placed Team O/U',
                 'ou-4th-gf-title': 'Goals For by 4th Placed Team O/U',
+                'ou-btts-title': 'Number of BTTS Matches O/U',
+                'ou-over25-title': 'Number of Over 2.5 Matches O/U',
+                'ou-zerozero-title': 'Number of 0-0 Matches O/U',
                 'custom-props-title': 'Custom Team Prop Odds',
                 'select-team-label': 'Select Team (from chosen group):',
                 'select-group-first-option': '-- Select Group First --',
@@ -364,6 +379,9 @@
                 'ou-4th-pts-title': 'Bodovi Četvrtoplasiranog Tima V/M',
                 'ou-1st-gf-title': 'Datih Golova Prvoplasiranog Tima V/M',
                 'ou-4th-gf-title': 'Datih Golova Četvrtoplasiranog Tima V/M',
+                'ou-btts-title': 'Broj GG Mečeva V/M',
+                'ou-over25-title': 'Broj 3+ Mečeva V/M',
+                'ou-zerozero-title': 'Broj 0-0 Mečeva V/M',
                 'custom-props-title': 'Prilagođene Kvote za Tim',
                 'select-team-label': 'Izaberi Tim (iz izabrane grupe):',
                 'select-group-first-option': '-- Prvo Izaberi Grupu --',
@@ -397,24 +415,25 @@
             currentLanguage = lang;
             document.querySelectorAll('[id]').forEach(el => {
                 const key = el.id;
-                if (translations[lang][key]) {
-                     if(el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                        if(el.placeholder) el.placeholder = translations[lang][key.replace('-label', '-placeholder')];
+                const translation = translations[lang][key.replace(/-\d+$/, '')] || translations[lang][key];
+                 if (translation) {
+                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                        const placeholderKey = (key.replace('-label', '') || key) + '-placeholder';
+                        if (translations[lang][placeholderKey]) {
+                            el.placeholder = translations[lang][placeholderKey];
+                        }
+                    } else if (el.tagName === 'SPAN' && el.parentElement.tagName === 'H5') {
+                         el.textContent = translation;
                     }
-                    el.innerHTML = translations[lang][key];
+                    else {
+                        el.innerHTML = translation;
+                    }
                 }
             });
-            
-            // Update placeholders separately
-            document.getElementById('matchData').placeholder = translations[lang]['match-data-placeholder'];
-            document.getElementById('liveResultsData').placeholder = translations[lang]['live-results-placeholder'];
 
-
-            // Update language button styles
             document.getElementById('langEn').classList.toggle('active', lang === 'en');
             document.getElementById('langSr').classList.toggle('active', lang === 'sr');
             
-            // Re-populate dropdowns to update their placeholder text
             populateSimGroupSelect();
         }
 
@@ -809,7 +828,7 @@
         function runSimulation(numSims) {
             const aggStats={}; 
             for(const gr in groupedMatches){ 
-                aggStats[gr]={ groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, anyTeam9PtsCount:0, anyTeam0PtsCount:0, firstPlacePtsSims:[], firstPlaceGFSims:[], fourthPlacePtsSims:[], fourthPlaceGFSims:[] }; 
+                aggStats[gr]={ groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, anyTeam9PtsCount:0, anyTeam0PtsCount:0, firstPlacePtsSims:[], firstPlaceGFSims:[], fourthPlacePtsSims:[], fourthPlaceGFSims:[], bttsCountSims: [], over25CountSims: [], zeroZeroCountSims: [] }; 
                 (groupTeamNames[gr]||[]).forEach(tN=>{ aggStats[gr][tN]={ posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [], mostGFCount:0, mostGACount:0 }; });
             }
             for(let i=0; i<numSims; i++){ 
@@ -821,6 +840,7 @@
                     const sTS={}; 
                     tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0}); 
                     let cGTG=0;
+                    let bttsCount = 0, over25Count = 0, zeroZeroCount = 0;
                     const currentSimMatchResults = [];
 
                     cGMs.forEach(m=>{
@@ -829,13 +849,16 @@
 
                         if (liveResults[resultKey]) {
                             const liveResult = liveResults[resultKey];
-                            // Ensure scores correspond to the correct team from the match data
                             g1 = (m.team1 === liveResult.team1) ? liveResult.g1 : liveResult.g2;
                             g2 = (m.team1 === liveResult.team1) ? liveResult.g2 : liveResult.g1;
                         } else {
                             g1 = poissonRandom(m.lambda1); 
                             g2 = poissonRandom(m.lambda2);
                         }
+
+                        if (g1 > 0 && g2 > 0) bttsCount++;
+                        if (g1 + g2 > 2.5) over25Count++;
+                        if (g1 === 0 && g2 === 0) zeroZeroCount++;
 
                         currentSimMatchResults.push({ team1: m.team1, team2: m.team2, g1, g2 });
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
@@ -846,7 +869,12 @@
                         else{if(sTS[m.team1])sTS[m.team1].pts+=1;if(sTS[m.team2])sTS[m.team2].pts+=1;}
                     });
             
-                    if(aggStats[gK]) aggStats[gK].groupTotalGoalsSims.push(cGTG);
+                    if(aggStats[gK]) {
+                        aggStats[gK].groupTotalGoalsSims.push(cGTG);
+                        aggStats[gK].bttsCountSims.push(bttsCount);
+                        aggStats[gK].over25CountSims.push(over25Count);
+                        aggStats[gK].zeroZeroCountSims.push(zeroZeroCount);
+                    }
                     
                     const groupStandings = tIG.map(tN => {
                         const s = sTS[tN] || { name: tN, pts: 0, gf: 0, ga: 0, gd: 0, wins: 0 };
@@ -909,10 +937,12 @@
         
         // --- Simulated Group Odds Tab Logic ---
         function calculateOddWithMargin(trueProb, marginDec) {
-            if (trueProb <= 0) return "N/A";
-            const fairOdd = 1 / trueProb;
-            const bookmakerOdd = fairOdd / (1 + marginDec);
-            return bookmakerOdd.toFixed(2);
+             if (trueProb <= 0) return "N/A";
+             // This formula correctly shortens the odds.
+             // It converts the true probability into the bookmaker's probability by adding the margin,
+             // and then calculates the odd from that.
+             const bookmakerProb = trueProb * (1 + marginDec);
+             return (1 / bookmakerProb).toFixed(2);
         }
         
         function populateSimGroupSelect() {
@@ -951,7 +981,7 @@
                 simTeamSelectEl.disabled = true;
                 generateGroupCsvButtonEl.disabled = true;
             }
-             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF'].forEach(id => {
+             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '';
              });
@@ -1034,8 +1064,8 @@
                     const avg = groupData[dataKey].reduce((a, b) => a + b, 0) / currentNumSims;
                     expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
 
-                    const centerLine = Math.round(avg) + 0.5;
-                    const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l > 0); 
+                    const centerLine = Math.floor(avg) + 0.5;
+                    const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l >= 0.5); 
                     let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
 
                     lines.forEach(line => {
@@ -1061,6 +1091,9 @@
             displayAvgAndOU('fourthPlacePtsSims', 'expectedFourthPlacePts', 'ouFourthPlacePtsResult');
             displayAvgAndOU('firstPlaceGFSims', 'expectedFirstPlaceGF', 'ouFirstPlaceGFResult');
             displayAvgAndOU('fourthPlaceGFSims', 'expectedFourthPlaceGF', 'ouFourthPlaceGFResult');
+            displayAvgAndOU('bttsCountSims', 'expectedBttsMatches', 'ouBttsMatchesResult');
+            displayAvgAndOU('over25CountSims', 'expectedOver25Matches', 'ouOver25MatchesResult');
+            displayAvgAndOU('zeroZeroCountSims', 'expectedZeroZeroMatches', 'ouZeroZeroMatchesResult');
         });
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
@@ -1129,7 +1162,7 @@
             simulatedOddsStatusEl.textContent = "";
             customProbInputsContainerEl.classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = translations[currentLanguage]['custom-odds-placeholder'];
-             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF'].forEach(id => {
+             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
                  const el = document.getElementById(id);
                  if (el) el.innerHTML = '';
              });
