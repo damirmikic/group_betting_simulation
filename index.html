@@ -112,10 +112,18 @@
             color: #6b7280; /* text-gray-500 */
             margin-left: 0.5rem;
         }
-        .lang-button.active {
+        .lang-button.active, .model-button.active {
             background-color: #3b82f6; /* blue-500 */
             color: white;
             font-weight: bold;
+        }
+        .model-button {
+             padding: 6px 12px;
+             cursor: pointer;
+             border: 1px solid #ccc;
+             background-color: #f1f1f1;
+             border-radius: 5px;
+             font-size: 0.875rem;
         }
     </style>
 </head>
@@ -132,16 +140,25 @@
 
         <div class="flex mb-0">
             <button id="tab-btn-simulator" class="tab-button active" onclick="openTab(event, 'simulatorTab')">Group Simulator</button>
+            <button id="tab-btn-knockout" class="tab-button" onclick="openTab(event, 'knockoutTab')">Knockout Stage</button>
             <button id="tab-btn-odds" class="tab-button" onclick="openTab(event, 'oddsCalculatorTab')">Simulated Group Odds</button>
         </div>
 
         <div id="simulatorTab" class="tab-content active">
+             <div class="flex items-center space-x-4 mb-4 p-3 bg-gray-100 rounded-lg">
+                <span id="model-select-label" class="text-sm font-medium text-gray-700">Simulation Model:</span>
+                <button id="modelOdds" class="model-button active">Odds Based</button>
+                <button id="modelElo" class="model-button">Elo Based</button>
+            </div>
+
             <p id="app-description" class="text-gray-600 mb-4 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
-            <div class="mb-4">
+            <div class="flex items-center space-x-2 mb-4">
                 <label for="csvFileInput" id="import-csv-label" class="file-input-button">Import CSV File</label>
                 <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
                 <span id="csvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                <p id="csv-instructions" class="mt-1 text-xs text-gray-500">
+            </div>
+            <div class="mb-4">
+                 <p id="csv-instructions" class="mt-1 text-xs text-gray-500">
                     CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>
                     Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
                     Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5 (TEAM_A/B are single fields)<br/>
@@ -149,9 +166,17 @@
                 </p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                <div class="mb-6">
-                    <label for="matchData" id="match-data-label" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
-                    <textarea id="matchData" rows="10" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                <div id="oddsBasedInputs">
+                    <div class="mb-6">
+                        <label for="matchData" id="match-data-label" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
+                        <textarea id="matchData" rows="10" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                    </div>
+                </div>
+                <div id="eloBasedInputs" class="hidden">
+                     <div class="mb-6">
+                        <label for="eloData" id="elo-data-label" class="block text-sm font-medium text-gray-700 mb-1">Team Elo Ratings:</label>
+                        <textarea id="eloData" rows="10" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter one team and rating per line.&#10;Format: Team Name Rating&#10;Example: Germany 2000"></textarea>
+                    </div>
                 </div>
                  <div class="mb-6">
                     <label for="liveResultsData" id="live-results-label" class="block text-sm font-medium text-gray-700 mb-1">Live Results (Optional):</label>
@@ -162,16 +187,48 @@
                 <label for="numSimulations" id="num-sims-label" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
                 <input type="number" id="numSimulations" value="10000" class="w-full md:w-1/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
             </div>
-            <div class="flex flex-col sm:flex-row gap-4 mb-6">
-                <button id="parseButton" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">1. Parse & Validate Data</button>
-                <button id="runButton" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>2. Run Simulation</button>
-                <button id="clearButton" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Clear All</button>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <button id="parseButton" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">1. Parse & Validate Data</button>
+                <button id="runButton" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>2. Run Simulation</button>
+                <button id="saveButton" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Save Scenario</button>
+                <label for="loadFileInput" id="load-label" class="bg-gray-500 hover:bg-gray-600 text-white text-center font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out cursor-pointer">Load Scenario</label>
+                <input type="file" id="loadFileInput" class="hidden-file-input" accept=".json">
+                <button id="clearButton" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Clear All</button>
             </div>
             <div id="statusArea" class="mb-4 text-sm text-gray-600"></div>
             <div id="loader" class="loader hidden"></div>
             <div id="resultsArea" class="bg-gray-50 p-4 rounded-md shadow-inner max-h-[70vh] overflow-y-auto">
                 <h2 id="sim-results-title" class="text-xl font-semibold text-gray-700 mb-3">Simulation Results:</h2>
                 <div id="resultsContent" class="text-sm"> Results will appear here... </div>
+            </div>
+        </div>
+        
+        <div id="knockoutTab" class="tab-content">
+             <h2 id="knockout-title" class="text-xl font-semibold text-gray-700 mb-3">Knockout Stage Simulation</h2>
+             <p id="knockout-desc" class="text-gray-600 mb-4 text-sm">Define the knockout bracket matchups below. Use placeholders like "1A" for 1st place in Group A, or "W_M1" for the winner of Match 1. The simulation will use the group stage results to populate the bracket and simulate to find the ultimate tournament winner.</p>
+             
+             <div class="mb-6">
+                 <label for="knockoutBracket" id="knockout-bracket-label" class="block text-sm font-medium text-gray-700 mb-1">Knockout Bracket Definition:</label>
+                 <textarea id="knockoutBracket" rows="15" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm" placeholder="Define one match per line, using 'vs'. Use prefixes for rounds.&#10;Example:&#10;# Round of 16&#10;R16_1: 1A vs 2B&#10;R16_2: 1C vs 2D&#10;...&#10;# Quarter-Finals&#10;QF_1: W_R16_1 vs W_R16_2&#10;...&#10;# Semi-Finals&#10;SF_1: W_QF_1 vs W_QF_2&#10;...&#10;# Final&#10;F_1: W_SF_1 vs W_SF_2"></textarea>
+            </div>
+             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                 <div>
+                    <label for="numTournamentSimulations" id="tournament-sims-label" class="block text-sm font-medium text-gray-700 mb-1">Number of Tournament Simulations:</label>
+                    <input type="number" id="numTournamentSimulations" value="10000" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                     <label for="tournamentMargin" id="tournament-margin-label" class="block text-sm font-medium text-gray-700 mb-1">Tournament Outright Margin (%):</label>
+                     <input type="number" id="tournamentMargin" step="0.1" min="0" value="10" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 10 for 10%">
+                </div>
+            </div>
+            <button id="runFullTournamentButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>Run Full Tournament Simulation</button>
+            
+            <div id="tournamentLoader" class="loader hidden mt-4"></div>
+            <div id="tournamentResultsArea" class="mt-6 bg-gray-50 p-4 rounded-md shadow-inner">
+                 <div id="tournamentWinnerContent" class="text-sm">Run a full tournament simulation to see winner odds.</div>
+                 <div id="tournamentFinalistsContent" class="text-sm mt-4"></div>
+                 <div id="tournamentReachContent" class="text-sm mt-4"></div>
+                 <div id="tournamentEliminationContent" class="text-sm mt-4"></div>
             </div>
         </div>
 
@@ -216,16 +273,16 @@
                     <div id="ouFirstPlacePtsResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
-                    <h5><span id="ou-4th-pts-title">Points of 4th Placed Team O/U</span> <span id="expectedFourthPlacePts" class="expected-value-info"></span></h5>
-                    <div id="ouFourthPlacePtsResult" class="text-xs"></div>
+                    <h5><span id="ou-last-pts-title">Points of Last Placed Team O/U</span> <span id="expectedLastPlacePts" class="expected-value-info"></span></h5>
+                    <div id="ouLastPlacePtsResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5><span id="ou-1st-gf-title">Goals For by 1st Placed Team O/U</span> <span id="expectedFirstPlaceGF" class="expected-value-info"></span></h5>
                     <div id="ouFirstPlaceGFResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
-                    <h5><span id="ou-4th-gf-title">Goals For by 4th Placed Team O/U</span> <span id="expectedFourthPlaceGF" class="expected-value-info"></span></h5>
-                    <div id="ouFourthPlaceGFResult" class="text-xs"></div>
+                    <h5><span id="ou-last-gf-title">Goals For by Last Placed Team O/U</span> <span id="expectedLastPlaceGF" class="expected-value-info"></span></h5>
+                    <div id="ouLastPlaceGFResult" class="text-xs"></div>
                 </div>
                 <div class="over-under-section">
                     <h5><span id="ou-btts-title">Number of BTTS Matches O/U</span> <span id="expectedBttsMatches" class="expected-value-info"></span></h5>
@@ -304,23 +361,39 @@
             en: {
                 'main-title': 'Football Competition Analysis Tool',
                 'tab-btn-simulator': 'Group Simulator',
+                'tab-btn-knockout': 'Knockout Stage',
                 'tab-btn-odds': 'Simulated Group Odds',
+                'model-select-label': 'Simulation Model:',
+                'model-odds-btn': 'Odds Based',
+                'model-elo-btn': 'Elo Based',
                 'app-description': 'Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.',
                 'import-csv-label': 'Import CSV File',
                 'no-file-selected': 'No file selected.',
                 'csv-instructions': `CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5 (TEAM_A/B are single fields)<br/>If team names contain the delimiter, quote them in the CSV (e.g., "Team, Inc.").`,
                 'match-data-label': 'Match Data (Odds Input):',
+                'elo-data-label': 'Team Elo Ratings:',
                 'match-data-placeholder': `Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5\nExample: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87`,
+                'elo-data-placeholder': 'Enter one team and rating per line.\nFormat: GROUP Team Name Rating\nExample: A Germany 2000',
                 'live-results-label': 'Live Results (Optional):',
                 'live-results-placeholder': 'Enter one result per line.\nFormat: Team A X-Y Team B\nExample: Germany 5-1 Scotland',
                 'num-sims-label': 'Number of Simulations:',
                 'parse-btn': '1. Parse & Validate Data',
                 'run-btn': '2. Run Simulation',
+                'save-btn': 'Save Scenario',
+                'load-label': 'Load Scenario',
                 'clear-btn': 'Clear All',
                 'sim-results-title': 'Simulation Results:',
                 'results-placeholder': 'Results will appear here...',
                 'sim-odds-title': 'Simulated Group Odds',
                 'sim-odds-desc': 'View odds derived from the simulation results. Select a group and apply a margin.',
+                'knockout-title': 'Knockout Stage Simulation',
+                'knockout-desc': 'Define the knockout bracket matchups below. Use placeholders like "1A" for 1st place in Group A, or "W_M1" for the winner of Match 1. The simulation will use the group stage results to populate the bracket and simulate to find the ultimate tournament winner.',
+                'knockout-bracket-label': 'Knockout Bracket Definition:',
+                'knockout-run-btn': 'Run Full Tournament Simulation',
+                'tournament-winner-title': 'Tournament Winner Probabilities',
+                'tournament-results-placeholder': 'Run a full tournament simulation to see winner odds.',
+                'tournament-sims-label': 'Number of Tournament Simulations:',
+                'tournament-margin-label': 'Tournament Outright Margin (%):',
                 'select-group-label': 'Select Group:',
                 'run-sim-first-option': '-- Run Simulation First --',
                 'select-group-option': '-- Select Group --',
@@ -332,9 +405,9 @@
                 'ou-margin-label': 'Over/Under Specific Margin (%):',
                 'ou-group-goals-title': 'Total Group Goals O/U',
                 'ou-1st-pts-title': 'Points of 1st Placed Team O/U',
-                'ou-4th-pts-title': 'Points of 4th Placed Team O/U',
+                'ou-last-pts-title': 'Points of Last Placed Team O/U',
                 'ou-1st-gf-title': 'Goals For by 1st Placed Team O/U',
-                'ou-4th-gf-title': 'Goals For by 4th Placed Team O/U',
+                'ou-last-gf-title': 'Goals For by Last Placed Team O/U',
                 'ou-btts-title': 'Number of BTTS Matches O/U',
                 'ou-over25-title': 'Number of Over 2.5 Matches O/U',
                 'ou-zerozero-title': 'Number of 0-0 Matches O/U',
@@ -372,23 +445,39 @@
             sr: {
                 'main-title': 'Alat za Analizu Takmičenja',
                 'tab-btn-simulator': 'Simulator Grupa',
+                 'tab-btn-knockout': 'Nokaut Faza',
                 'tab-btn-odds': 'Simulirane Kvote Grupe',
+                 'model-select-label': 'Model Simulacije:',
+                'model-odds-btn': 'Na osnovu Kvota',
+                'model-elo-btn': 'Na osnovu Elo',
                 'app-description': 'Unesite kvote mečeva da simulirate ishode grupe i analizirate verovatnoće. Lambde se izvode pomoću iterativnog xG proračuna na osnovu kvota za Više/Manje i Domaćin/Gost.',
                 'import-csv-label': 'Uvezi CSV Fajl',
                 'no-file-selected': 'Nije izabran fajl.',
                 'csv-instructions': `CSV Delimiteri: zarez, tačka-zarez ili tab. Svaki red jedan meč.<br/>Stil 1 (sa 'vs'): GRUPA,TIM_A,vs,TIM_B,KVOTA1,KVOTAX,KVOTA2,KVOTA_U2.5,KVOTA_O2.5<br/>Stil 2 (bez 'vs'): GRUPA,TIM_A,TIM_B,KVOTA1,KVOTAX,KVOTA2,KVOTA_U2.5,KVOTA_O2.5<br/>Ako imena timova sadrže delimiter, stavite ih pod navodnike (npr. "Tim, Inc.").`,
                 'match-data-label': 'Podaci o Mečevima (Unos Kvota):',
+                'elo-data-label': 'Elo Rejting Timova:',
                 'match-data-placeholder': `Nalepite podatke o mečevima ovde ili ih uvezite iz CSV-a. Svaki red: GRUPA TIM_A vs TIM_B KVOTA_1 KVOTA_X KVOTA_2 KVOTA_ISPOD_2.5 KVOTA_PREKO_2.5\nPrimer: A Srbija vs Engleska 3.9 3.85 1.85 1.93 1.87`,
+                 'elo-data-placeholder': 'Unesite jedan tim i rejting po redu.\nFormat: GRUPA Ime Tima Rejting\nPrimer: A Nemačka 2000',
                 'live-results-label': 'Uživo Rezultati (Opciono):',
                 'live-results-placeholder': 'Unesite jedan rezultat po redu.\nFormat: Tim A X-Y Tim B\nPrimer: Nemačka 5-1 Škotska',
                 'num-sims-label': 'Broj Simulacija:',
                 'parse-btn': '1. Parsiraj i Validaraj Podatke',
                 'run-btn': '2. Pokreni Simulaciju',
+                'save-btn': 'Sačuvaj Scenario',
+                'load-label': 'Učitaj Scenario',
                 'clear-btn': 'Obriši Sve',
                 'sim-results-title': 'Rezultati Simulacije:',
                 'results-placeholder': 'Rezultati će se pojaviti ovde...',
                 'sim-odds-title': 'Simulirane Kvote Grupe',
                 'sim-odds-desc': 'Pogledajte kvote izvedene iz rezultata simulacije. Izaberite grupu i primenite maržu.',
+                'knockout-title': 'Simulacija Nokaut Faze',
+                'knockout-desc': 'Definišite parove nokaut faze. Koristite oznake kao "1A" za prvoplasiranog iz grupe A, ili "W_M1" za pobednika Meča 1. Simulacija će koristiti rezultate grupne faze da popuni kostur i simulira do krajnjeg pobednika.',
+                'knockout-bracket-label': 'Definicija Nokaut Faze:',
+                'knockout-run-btn': 'Pokreni Simulaciju Celog Turnira',
+                'tournament-winner-title': 'Verovatnoće za Osvajanje Turnira',
+                'tournament-sims-label': 'Broj Simulacija Turnira:',
+                'tournament-margin-label': 'Marža za Pobednika Turnira (%):',
+                'tournament-results-placeholder': 'Pokrenite simulaciju celog turnira da vidite kvote za pobednika.',
                 'select-group-label': 'Izaberi Grupu:',
                 'run-sim-first-option': '-- Prvo Pokreni Simulaciju --',
                 'select-group-option': '-- Izaberi Grupu --',
@@ -400,9 +489,9 @@
                 'ou-margin-label': 'Specifična Marža za Više/Manje (%):',
                 'ou-group-goals-title': 'Ukupno Golova u Grupi V/M',
                 'ou-1st-pts-title': 'Bodovi Prvoplasiranog Tima V/M',
-                'ou-4th-pts-title': 'Bodovi Četvrtoplasiranog Tima V/M',
+                'ou-last-pts-title': 'Bodovi Poslednjeplasiranog Tima V/M',
                 'ou-1st-gf-title': 'Datih Golova Prvoplasiranog Tima V/M',
-                'ou-4th-gf-title': 'Datih Golova Četvrtoplasiranog Tima V/M',
+                'ou-last-gf-title': 'Datih Golova Poslednjeplasiranog Tima V/M',
                 'ou-btts-title': 'Broj GG Mečeva V/M',
                 'ou-over25-title': 'Broj 3+ Mečeva V/M',
                 'ou-zerozero-title': 'Broj 0-0 Mečeva V/M',
@@ -483,11 +572,13 @@
         }
         
         // --- Global Variables ---
-        let parsedMatches = [], allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0, liveResults = {};
+        let parsedMatches = [], allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0, liveResults = {}, teamEloRatings = {};
+        let currentModel = 'odds'; // 'odds' or 'elo'
 
         // --- DOM Elements ---
-        const matchDataEl = document.getElementById('matchData'), liveResultsDataEl = document.getElementById('liveResultsData'), numSimulationsEl = document.getElementById('numSimulations');
+        const matchDataEl = document.getElementById('matchData'), liveResultsDataEl = document.getElementById('liveResultsData'), numSimulationsEl = document.getElementById('numSimulations'), eloDataEl = document.getElementById('eloData');
         const parseButtonEl = document.getElementById('parseButton'), runButtonEl = document.getElementById('runButton'), clearButtonEl = document.getElementById('clearButton');
+        const saveButtonEl = document.getElementById('saveButton'), loadFileInputEl = document.getElementById('loadFileInput');
         const statusAreaEl = document.getElementById('statusArea'), loaderEl = document.getElementById('loader'), resultsContentEl = document.getElementById('resultsContent');
         const csvFileInputEl = document.getElementById('csvFileInput'), csvFileNameEl = document.getElementById('csvFileName');
         const simGroupSelectEl = document.getElementById('simGroupSelect'), simBookieMarginEl = document.getElementById('simBookieMargin');
@@ -501,6 +592,35 @@
         const customProbAndOddResultAreaEl = document.getElementById('customProbAndOddResultArea');
         const generateTeamCsvButtonEl = document.getElementById('generateTeamCsvButton'); 
         const generateGroupCsvButtonEl = document.getElementById('generateGroupCsvButton');
+        const modelOddsBtn = document.getElementById('modelOdds'), modelEloBtn = document.getElementById('modelElo');
+        const oddsBasedInputs = document.getElementById('oddsBasedInputs'), eloBasedInputs = document.getElementById('eloBasedInputs');
+        const knockoutBracketEl = document.getElementById('knockoutBracket');
+        const runFullTournamentButtonEl = document.getElementById('runFullTournamentButton');
+        const tournamentLoaderEl = document.getElementById('tournamentLoader');
+        const tournamentWinnerContentEl = document.getElementById('tournamentWinnerContent');
+        const tournamentFinalistsContentEl = document.getElementById('tournamentFinalistsContent');
+        const tournamentReachContentEl = document.getElementById('tournamentReachContent');
+        const tournamentEliminationContentEl = document.getElementById('tournamentEliminationContent');
+        const numTournamentSimulationsEl = document.getElementById('numTournamentSimulations');
+
+        // --- Model Switcher Logic ---
+        modelOddsBtn.addEventListener('click', () => switchModel('odds'));
+        modelEloBtn.addEventListener('click', () => switchModel('elo'));
+
+        function switchModel(model) {
+            currentModel = model;
+            modelOddsBtn.classList.toggle('active', model === 'odds');
+            modelEloBtn.classList.toggle('active', model === 'elo');
+            oddsBasedInputs.classList.toggle('hidden', model !== 'odds');
+            eloBasedInputs.classList.toggle('hidden', model !== 'elo');
+            
+            // Clear parsed data when switching models to avoid confusion
+            parsedMatches = [];
+            teamEloRatings = {};
+            runButtonEl.disabled = true;
+            runFullTournamentButtonEl.disabled = true;
+            statusAreaEl.innerHTML = `<p class="text-blue-500">Switched to ${model.toUpperCase()} model. Please parse data.</p>`;
+        }
 
 
         // --- CSV File Input ---
@@ -515,7 +635,7 @@
             } else { csvFileNameEl.textContent = translations[currentLanguage]['no-file-selected']; }
         });
         
-        // --- xG Calculation & Helpers ---
+        // --- xG & Elo Calculation & Helpers ---
         function factorialJs(n) {
             if (n < 0) return NaN;
             if (n === 0) return 1;
@@ -543,6 +663,21 @@
                 p *= Math.random();
             } while (p > L);
             return k - 1;
+        }
+
+        function calculateExpectedScore(ratingA, ratingB) {
+            return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+        }
+
+        function updateElo(rating, actualScore, expectedScore) {
+            const kFactor = 30; // K-factor can be adjusted
+            return rating + kFactor * (actualScore - expectedScore);
+        }
+
+        function eloToGoalSupremacy(eloDiff) {
+            // This is a simple linear mapping. A 100-point Elo difference equals 0.3 goals supremacy.
+            // This can be made more complex (e.g., non-linear) for more advanced models.
+            return (eloDiff / 100) * 0.3;
         }
         
         function calculateModelProbsFromXG(homeXG, awayXG, goalLine = 2.5) {
@@ -685,7 +820,6 @@
                 line = line.trim();
                 if (!line) return;
                 
-                // Regex to find the score (e.g., "2-1" or "0 - 0") and capture teams around it
                 const scoreRegex = /^(.*)\s+(\d+)\s*-\s*(\d+)\s+(.*)$/;
                 const match = line.match(scoreRegex);
 
@@ -700,7 +834,6 @@
                         return;
                     }
                     
-                    // Store result with a sorted key to find it regardless of team order
                     const resultKey = [team1Name, team2Name].sort().join('-');
                     liveResults[resultKey] = { team1: team1Name, g1: score1, g2: score2 };
 
@@ -716,83 +849,132 @@
             }
         }
 
+        function parseEloData() {
+            teamEloRatings = {};
+            const data = eloDataEl.value.trim();
+            if (!data) return true;
+
+            const lines = data.split('\n');
+            let errors = [];
+            lines.forEach((line, index) => {
+                line = line.trim();
+                if (!line) return;
+                
+                const parts = line.split(/\s+/);
+                const rating = parseInt(parts.pop(), 10);
+                const group = parts.shift();
+                const teamName = parts.join(' ');
+                
+                if (!group || !teamName || isNaN(rating)) {
+                     errors.push(`Invalid Elo format on line ${index + 1}: "${line}"`);
+                     return;
+                }
+                teamEloRatings[teamName] = { rating, group };
+                allTeams.add(teamName);
+                 if (!groupTeamNames[group]) {
+                    groupTeamNames[group] = new Set();
+                }
+                groupTeamNames[group].add(teamName);
+            });
+
+            if (errors.length > 0) {
+                 statusAreaEl.innerHTML += `<p class="text-red-500 font-semibold mt-2">Elo Parse Errors:</p><ul class="list-disc list-inside text-red-500">${errors.map(e => `<li>${e}</li>`).join('')}</ul>`;
+                 return false;
+            }
+            statusAreaEl.innerHTML += `<p class="text-green-500">Parsed ${Object.keys(teamEloRatings).length} Elo ratings into ${Object.keys(groupTeamNames).length} groups.</p>`;
+            return true;
+        }
+
 
         // --- Parsing Logic (Simulator) ---
         parseButtonEl.addEventListener('click', () => {
             statusAreaEl.innerHTML = '';
-            const data = matchDataEl.value.trim(); if (!data) { statusAreaEl.innerHTML = '<p class="text-red-500">Error: Match data empty.</p>'; return; }
-            const lines = data.split('\n'); parsedMatches = []; allTeams.clear(); groupedMatches = {}; groupTeamNames = {};
-            let errors = [], warnings = [];
-            lines.forEach((line, index) => {
-                line = line.trim(); if (!line || line.startsWith('#')) return;
-                let parts, isCsvLike = false;
-                if (line.includes(',')) { parts = line.split(',').map(p => p.trim()); isCsvLike = true; }
-                else if (line.includes(';')) { parts = line.split(';').map(p => p.trim()); isCsvLike = true; }
-                else if (line.includes('\t')) { parts = line.split('\t').map(p => p.trim()); isCsvLike = true; }
-                else { parts = line.split(/\s+/).map(p => p.trim()); }
-                parts = parts.filter(p => p.length > 0);
-                let group, team1Name, team2Name, oddsStrings;
-                if (isCsvLike) {
-                    const vsIdx = parts.map(p => p.toLowerCase()).indexOf('vs');
-                    if (vsIdx !== -1) { 
-                        if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV 'vs'): Empty T names. L:"${line}"`); return; }}
-                        else { errors.push(`L${index+1}(CSV 'vs'): 'vs' wrong pos/few odds. L:"${line}"`); return; }
+            runButtonEl.disabled = true;
+            runFullTournamentButtonEl.disabled = true;
+            parsedMatches = []; 
+            allTeams.clear(); 
+            groupedMatches = {}; 
+            groupTeamNames = {};
+            let warnings = [];
+            
+            if (currentModel === 'odds') {
+                 // The existing odds parsing logic
+                const data = matchDataEl.value.trim(); 
+                if (!data) { statusAreaEl.innerHTML = '<p class="text-red-500">Error: Match data empty.</p>'; return; }
+                const lines = data.split('\n');
+                let errors = [];
+                lines.forEach((line, index) => {
+                    line = line.trim(); if (!line || line.startsWith('#')) return;
+                    let parts, isCsvLike = false;
+                    if (line.includes(',')) { parts = line.split(',').map(p => p.trim()); isCsvLike = true; }
+                    else if (line.includes(';')) { parts = line.split(';').map(p => p.trim()); isCsvLike = true; }
+                    else if (line.includes('\t')) { parts = line.split('\t').map(p => p.trim()); isCsvLike = true; }
+                    else { parts = line.split(/\s+/).map(p => p.trim()); }
+                    parts = parts.filter(p => p.length > 0);
+                    let group, team1Name, team2Name, oddsStrings;
+                    if (isCsvLike) {
+                        const vsIdx = parts.map(p => p.toLowerCase()).indexOf('vs');
+                        if (vsIdx !== -1) { 
+                            if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV 'vs'): Empty T names. L:"${line}"`); return; }}
+                            else { errors.push(`L${index+1}(CSV 'vs'): 'vs' wrong pos/few odds. L:"${line}"`); return; }
+                        } else { 
+                            if (parts.length >= 8) { group = parts[0]; team1Name = parts[1]; team2Name = parts[2]; oddsStrings = parts.slice(3, 8); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV no 'vs'): Empty T names. L:"${line}"`); return; }}
+                            else { errors.push(`L${index+1}(CSV no 'vs'): <8 cols. Exp G,T1,T2,O1,OX,O2,OU_U,OU_O. Got ${parts.length}. L:"${line}"`); return; }
+                        }
                     } else { 
-                        if (parts.length >= 8) { group = parts[0]; team1Name = parts[1]; team2Name = parts[2]; oddsStrings = parts.slice(3, 8); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV no 'vs'): Empty T names. L:"${line}"`); return; }}
-                        else { errors.push(`L${index+1}(CSV no 'vs'): <8 cols. Exp G,T1,T2,O1,OX,O2,OU_U,OU_O. Got ${parts.length}. L:"${line}"`); return; }
+                        const vsIdx = parts.map(p => p.toLowerCase()).indexOf('vs');
+                        if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(Space): Empty T names. L:"${line}"`); return; }}
+                        else { errors.push(`L${index+1}(Space): 'vs' issue/few odds. Exp G T1 vs T2 O1 OX O2 OU_U OU_O. L:"${line}"`); return; }
                     }
-                } else { 
-                    const vsIdx = parts.map(p => p.toLowerCase()).indexOf('vs');
-                    if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(Space): Empty T names. L:"${line}"`); return; }}
-                    else { errors.push(`L${index+1}(Space): 'vs' issue/few odds. Exp G T1 vs T2 O1 OX O2 OU_U OU_O. L:"${line}"`); return; }
-                }
-                if (!oddsStrings || oddsStrings.length !== 5) { errors.push(`L${index+1}: Odds extract fail. Odds:${oddsStrings}. L:"${line}"`); return; }
-                const odds = oddsStrings.map(parseFloat);
-                if (odds.some(isNaN)) { errors.push(`L${index+1}: Invalid odds. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
-                if (odds.some(o => o <= 0)) { errors.push(`L${index+1}: Odds must be >0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
+                    if (!oddsStrings || oddsStrings.length !== 5) { errors.push(`L${index+1}: Odds extract fail. Odds:${oddsStrings}. L:"${line}"`); return; }
+                    const odds = oddsStrings.map(parseFloat);
+                    if (odds.some(isNaN)) { errors.push(`L${index+1}: Invalid odds. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
+                    if (odds.some(o => o <= 0)) { errors.push(`L${index+1}: Odds must be >0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
+                    
+                    const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, odds};
+                    parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
+                    if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
+                    groupedMatches[group].push(match); groupTeamNames[group].add(team1Name); groupTeamNames[group].add(team2Name);
+                });
+                 if (errors.length > 0) { statusAreaEl.innerHTML += `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; return; }
+            } else { // Elo model
+                if (!parseEloData()) return; 
                 
-                const [o1, ox, o2, oUnder25, oOver25] = odds;
-
-                const sumInv1X2 = (1/o1)+(1/ox)+(1/o2); if (sumInv1X2 === 0) { errors.push(`L${index+1}: Sum inv 1X2 odds 0. L:"${line}"`); return; }
-                const p1_market=(1/o1)/sumInv1X2, px_market=(1/ox)/sumInv1X2, p2_market=(1/o2)/sumInv1X2;
-
-                const xGResult = calculateExpectedGoalsFromOdds(oOver25, oUnder25, o1, o2);
-                let lambda1 = xGResult.homeXG;
-                let lambda2 = xGResult.awayXG;
-
-                if (isNaN(lambda1) || isNaN(lambda2) || lambda1 <=0 || lambda2 <=0) {
-                   warnings.push(`L${index+1}: xG calc fail/non-positive for ${team1Name}v${team2Name}. Defaulting. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
-                   const p_under_fb = (1/oUnder25) / ((1/oOver25) + (1/oUnder25)); 
-                   const lt_fb_simple_approx = 2.5; 
-                   const s1_fb = p1_market + 0.5 * px_market;
-                   const s2_fb = p2_market + 0.5 * px_market;
-                   if(s1_fb + s2_fb > 0){
-                       lambda1 = lt_fb_simple_approx * s1_fb / (s1_fb + s2_fb);
-                       lambda2 = lt_fb_simple_approx * s2_fb / (s1_fb + s2_fb);
-                   } else {
-                       lambda1 = lt_fb_simple_approx / 2; lambda2 = lt_fb_simple_approx / 2;
-                   }
-                   lambda1 = Math.max(0.05, lambda1); lambda2 = Math.max(0.05, lambda2);
+                for (const group in groupTeamNames) {
+                    const teams = Array.from(groupTeamNames[group]);
+                    for (let i = 0; i < teams.length; i++) {
+                        for (let j = i + 1; j < teams.length; j++) {
+                            const match = { group, team1: teams[i], team2: teams[j] };
+                            parsedMatches.push(match);
+                             if (!groupedMatches[group]) groupedMatches[group] = [];
+                            groupedMatches[group].push(match);
+                        }
+                    }
                 }
-
-                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, 
-                                p1: p1_market, px: px_market, p2: p2_market, 
-                                lambda1, lambda2 };
-                parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
-                if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
-                groupedMatches[group].push(match); groupTeamNames[group].add(team1Name); groupTeamNames[group].add(team2Name);
-            });
+            }
+            
+            // Common finalization for both models
             for (const group in groupTeamNames) {
-                if (groupTeamNames[group].size !== 4) warnings.push(`Gr ${group}: ${groupTeamNames[group].size} teams (exp 4).`);
-                if (groupedMatches[group] && groupedMatches[group].length !== 6 && groupTeamNames[group].size === 4) warnings.push(`Gr ${group}: ${groupedMatches[group].length} matches (exp 6).`);
+                const numTeams = groupTeamNames[group].size;
+                const expectedMatches = numTeams * (numTeams - 1) / 2;
+                if (groupedMatches[group] && groupedMatches[group].length !== expectedMatches) {
+                    warnings.push(`Gr ${group}: Found ${groupedMatches[group].length} matches, but expected ${expectedMatches} for a group of ${numTeams} teams.`);
+                }
                 groupTeamNames[group] = Array.from(groupTeamNames[group]);
             }
 
-            parseLiveResults(); // Parse live results after parsing odds data
-
-            if (errors.length > 0) { statusAreaEl.innerHTML += `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = true; }
-            else { statusAreaEl.innerHTML += `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams.</p>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = false; resultsContentEl.innerHTML = "Parsed. Ready for sim."; }
+            parseLiveResults(); 
+            
+            if (statusAreaEl.querySelector('.text-red-500')) {
+                 runButtonEl.disabled = true;
+            } else {
+                 statusAreaEl.innerHTML += `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams.</p>`; 
+                 runButtonEl.disabled = false; 
+                 runFullTournamentButtonEl.disabled = false;
+                 resultsContentEl.innerHTML = "Parsed. Ready for sim.";
+            }
         });
+
 
         // --- Tie-breaking Logic ---
         function tieBreaker(a, b, allTeamsInGroup, matchResults) {
@@ -831,12 +1013,13 @@
         runButtonEl.addEventListener('click', () => {
             if (parsedMatches.length === 0) { statusAreaEl.innerHTML = '<p class="text-red-500">No data.</p>'; return; }
             currentNumSims = parseInt(numSimulationsEl.value); if (isNaN(currentNumSims) || currentNumSims <= 0) { statusAreaEl.innerHTML = '<p class="text-red-500">Sims > 0.</p>'; return; }
-            loaderEl.classList.remove('hidden'); statusAreaEl.innerHTML = `<p class="text-blue-500">Running ${currentNumSims} sims...</p>`;
+            loaderEl.classList.remove('hidden'); statusAreaEl.innerHTML = `<p class="text-blue-500">Running ${currentNumSims} sims using ${currentModel.toUpperCase()} model...</p>`;
             resultsContentEl.innerHTML = ""; runButtonEl.disabled = true; parseButtonEl.disabled = true;
             
             setTimeout(() => {
                 try {
-                    simulationAggStats = runSimulation(currentNumSims);
+                    const { groupStats } = runSimulation(currentNumSims);
+                    simulationAggStats = groupStats;
                     displayResults(simulationAggStats, currentNumSims);
                     populateSimGroupSelect(); 
                     statusAreaEl.innerHTML = `<p class="text-green-500">Sim complete! (${currentNumSims} runs)</p>`;
@@ -853,13 +1036,41 @@
             }, 50);
         });
 
-        function runSimulation(numSims) {
+        function runSimulation(numSims, isFullTournament = false) {
+            const tournamentProgress = {};
+            if(isFullTournament) {
+                allTeams.forEach(team => {
+                    tournamentProgress[team] = {
+                        winner: 0,
+                        reached_F: 0,
+                        reached_SF: 0,
+                        reached_QF: 0,
+                        reached_R16: 0,
+                        eliminated_group: 0,
+                        eliminated_R16: 0,
+                        eliminated_QF: 0,
+                        eliminated_SF: 0,
+                        eliminated_F: 0,
+                    };
+                });
+                tournamentProgress.finalists = {};
+            }
+
             const aggStats={}; 
             for(const gr in groupedMatches){ 
-                aggStats[gr]={ groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, anyTeam9PtsCount:0, anyTeam0PtsCount:0, firstPlacePtsSims:[], firstPlaceGFSims:[], fourthPlacePtsSims:[], fourthPlaceGFSims:[], bttsCountSims: [], over25CountSims: [], zeroZeroCountSims: [] }; 
-                (groupTeamNames[gr]||[]).forEach(tN=>{ aggStats[gr][tN]={ posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [], drawsSims: [], lossesSims: [], unbeatenCount: 0, mostGFCount:0, mostGACount:0 }; });
+                const teamsInGroup = groupTeamNames[gr] || [];
+                const numTeamsInGroup = teamsInGroup.length;
+                aggStats[gr]={ groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, anyTeam9PtsCount:0, anyTeam0PtsCount:0, firstPlacePtsSims:[], firstPlaceGFSims:[], lastPlacePtsSims:[], lastPlaceGFSims:[], bttsCountSims: [], over25CountSims: [], zeroZeroCountSims: [] }; 
+                (teamsInGroup).forEach(tN=>{ aggStats[gr][tN]={ posCounts: new Array(numTeamsInGroup).fill(0), ptsSims:[], gfSims:[], gaSims:[], winsSims: [], drawsSims: [], lossesSims: [], unbeatenCount: 0, mostGFCount:0, mostGACount:0 }; });
             }
+
             for(let i=0; i<numSims; i++){ 
+                 const simEloRatings = {};
+                 for(const teamName in teamEloRatings) {
+                     simEloRatings[teamName] = teamEloRatings[teamName].rating;
+                 }
+
+                const groupResults = {};
                 for(const gK in groupedMatches){ 
                     const cGMs=groupedMatches[gK];
                     const tIG=[...(groupTeamNames[gK]||[])]; 
@@ -880,8 +1091,22 @@
                             g1 = (m.team1 === liveResult.team1) ? liveResult.g1 : liveResult.g2;
                             g2 = (m.team1 === liveResult.team1) ? liveResult.g2 : liveResult.g1;
                         } else {
-                            g1 = poissonRandom(m.lambda1); 
-                            g2 = poissonRandom(m.lambda2);
+                            let lambda1, lambda2;
+                            if (currentModel === 'odds') {
+                                const [o1, ox, o2, oUnder25, oOver25] = m.odds;
+                                const xGResult = calculateExpectedGoalsFromOdds(oOver25, oUnder25, o1, o2);
+                                lambda1 = xGResult.homeXG;
+                                lambda2 = xGResult.awayXG;
+                            } else { // Elo model
+                                const elo1 = simEloRatings[m.team1];
+                                const elo2 = simEloRatings[m.team2];
+                                const supremacy = eloToGoalSupremacy(elo1 - elo2);
+                                const baseGoals = 2.5; // Assumed average goals per match
+                                lambda1 = Math.max(0.05, baseGoals / 2 + supremacy / 2);
+                                lambda2 = Math.max(0.05, baseGoals / 2 - supremacy / 2);
+                            }
+                            g1 = poissonRandom(lambda1); 
+                            g2 = poissonRandom(lambda2);
                         }
 
                         if (g1 > 0 && g2 > 0) bttsCount++;
@@ -892,18 +1117,31 @@
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
                         cGTG+=(g1+g2); 
+                        let actualScore1, actualScore2;
                         if(g1>g2){
                             if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;}
                             if(sTS[m.team2]){sTS[m.team2].losses+=1;}
+                            actualScore1 = 1; actualScore2 = 0;
                         }
                         else if(g2>g1){
                             if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;}
                              if(sTS[m.team1]){sTS[m.team1].losses+=1;}
+                             actualScore1 = 0; actualScore2 = 1;
                         }
                         else{
                             if(sTS[m.team1]){sTS[m.team1].pts+=1; sTS[m.team1].draws+=1;}
                             if(sTS[m.team2]){sTS[m.team2].pts+=1; sTS[m.team2].draws+=1;}
+                            actualScore1 = 0.5; actualScore2 = 0.5;
                         }
+                        
+                         // Update Elo ratings within the simulation run
+                        if (currentModel === 'elo') {
+                            const expected1 = calculateExpectedScore(simEloRatings[m.team1], simEloRatings[m.team2]);
+                            const expected2 = 1 - expected1;
+                            simEloRatings[m.team1] = updateElo(simEloRatings[m.team1], actualScore1, expected1);
+                            simEloRatings[m.team2] = updateElo(simEloRatings[m.team2], actualScore2, expected2);
+                        }
+
                     });
             
                     if(aggStats[gK]) {
@@ -920,7 +1158,8 @@
                     });
             
                     const rTs = groupStandings.sort((a, b) => tieBreaker(a, b, groupStandings, currentSimMatchResults));
-            
+                    groupResults[gK] = rTs;
+
                     let mGF=-1,mGA=-1, groupHad9Pts=false, groupHad0Pts=false; 
                     rTs.forEach(t=>{
                         mGF=Math.max(mGF,t.gf); mGA=Math.max(mGA,t.ga); 
@@ -929,13 +1168,18 @@
                     if(groupHad9Pts&&aggStats[gK])aggStats[gK].anyTeam9PtsCount++; 
                     if(groupHad0Pts&&aggStats[gK])aggStats[gK].anyTeam0PtsCount++;
             
-                    if(rTs.length>0&&aggStats[gK]){ aggStats[gK].firstPlacePtsSims.push(rTs[0].pts); aggStats[gK].firstPlaceGFSims.push(rTs[0].gf); } 
-                    if(rTs.length>=4&&aggStats[gK]){ aggStats[gK].fourthPlacePtsSims.push(rTs[3].pts); aggStats[gK].fourthPlaceGFSims.push(rTs[3].gf); }
-            
+                    if(rTs.length>0&&aggStats[gK]){ 
+                        aggStats[gK].firstPlacePtsSims.push(rTs[0].pts); 
+                        aggStats[gK].firstPlaceGFSims.push(rTs[0].gf); 
+                        const lastPlaceIndex = rTs.length - 1;
+                        aggStats[gK].lastPlacePtsSims.push(rTs[lastPlaceIndex].pts);
+                        aggStats[gK].lastPlaceGFSims.push(rTs[lastPlaceIndex].gf);
+                    } 
+                    
                     rTs.forEach((t,rI)=>{
                         const tA=aggStats[gK]?.[t.name]; 
                         if(tA){
-                            if(rI<4)tA.posCounts[rI]++; 
+                            if(rI < tIG.length) tA.posCounts[rI]++; 
                             tA.ptsSims.push(t.pts); 
                             tA.winsSims.push(t.wins);
                             tA.drawsSims.push(t.draws);
@@ -958,9 +1202,225 @@
                         aggStats[gK].advancingDoubles[aDK]=(aggStats[gK].advancingDoubles[aDK]||0)+1;
                     }
                 }
+
+                if (isFullTournament) {
+                    simulateKnockoutStage(groupResults, simEloRatings, tournamentProgress);
+                }
             }
-            return aggStats;
+            if (isFullTournament) {
+                return { groupStats: aggStats, tournamentProgress };
+            }
+            return { groupStats: aggStats };
         }
+
+        function simulateKnockoutStage(groupResults, simEloRatings, progressStats) {
+            const bracketText = knockoutBracketEl.value;
+            const bracketLines = bracketText.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+            if (bracketLines.length === 0) return null;
+
+            const knockoutWinners = {};
+            const knockoutLosers = {};
+            const stageMatches = { R16: [], QF: [], SF: [], F: [] };
+            const teamsInStage = { R16: new Set(), QF: new Set(), SF: new Set(), F: new Set() };
+            
+            // First, parse bracket to identify stages
+            bracketLines.forEach(line => {
+                const matchId = line.split(':')[0].trim().toUpperCase();
+                if (matchId.startsWith('R16')) stageMatches.R16.push(line);
+                else if (matchId.startsWith('QF')) stageMatches.QF.push(line);
+                else if (matchId.startsWith('SF')) stageMatches.SF.push(line);
+                else if (matchId.startsWith('F')) stageMatches.F.push(line);
+            });
+
+
+            const getTeam = (placeholder) => {
+                placeholder = placeholder.trim().toUpperCase();
+                const winnerMatch = placeholder.match(/^W_(\S+)/);
+                if (winnerMatch) {
+                    const matchId = winnerMatch[1].toUpperCase();
+                    return knockoutWinners[matchId];
+                }
+                
+                const groupMatch = placeholder.match(/^(\d+)([A-Z])$/);
+                if (groupMatch) {
+                    const pos = parseInt(groupMatch[1], 10) - 1;
+                    const group = groupMatch[2];
+                    if (groupResults[group] && groupResults[group][pos]) {
+                        return groupResults[group][pos].name;
+                    }
+                }
+                return null;
+            };
+
+            const runStage = (stageName) => {
+                 for(const line of stageMatches[stageName]) {
+                    const parts = line.split(':');
+                    const matchId = parts[0].trim().toUpperCase();
+                    const teamsDef = parts[1].split(/vs/i);
+                    
+                    const team1Name = getTeam(teamsDef[0]);
+                    const team2Name = getTeam(teamsDef[1]);
+
+                    if (!team1Name || !team2Name) continue; 
+                    
+                    teamsInStage[stageName].add(team1Name);
+                    teamsInStage[stageName].add(team2Name);
+
+                    let g1, g2;
+                    do {
+                        let lambda1, lambda2;
+                         if (currentModel === 'elo') {
+                            const elo1 = simEloRatings[team1Name];
+                            const elo2 = simEloRatings[team2Name];
+                            const supremacy = eloToGoalSupremacy(elo1 - elo2);
+                            const baseGoals = 2.5; 
+                            lambda1 = Math.max(0.05, baseGoals / 2 + supremacy / 2);
+                            lambda2 = Math.max(0.05, baseGoals / 2 - supremacy / 2);
+                        } else { // Fallback for odds model if knockout odds aren't provided
+                            lambda1 = 1.25; 
+                            lambda2 = 1.25;
+                        }
+                        g1 = poissonRandom(lambda1);
+                        g2 = poissonRandom(lambda2);
+                    } while (g1 === g2); 
+
+                    const winner = g1 > g2 ? team1Name : team2Name;
+                    const loser = g1 > g2 ? team2Name : team1Name;
+                    knockoutWinners[matchId] = winner;
+                    knockoutLosers[matchId] = loser;
+                }
+            };
+            
+            runStage('R16');
+            runStage('QF');
+            runStage('SF');
+            runStage('F');
+            
+            // Update progress stats based on who made it to which stage
+            allTeams.forEach(team => {
+                const inR16 = teamsInStage.R16.has(team);
+                const inQF = teamsInStage.QF.has(team);
+                const inSF = teamsInStage.SF.has(team);
+                const inF = teamsInStage.F.has(team);
+                const winner = knockoutWinners[Object.keys(knockoutWinners).pop()] === team;
+
+                if (inR16) progressStats[team].reached_R16++;
+                if (inQF) progressStats[team].reached_QF++;
+                if (inSF) progressStats[team].reached_SF++;
+                if (inF) progressStats[team].reached_F++;
+                if (winner) progressStats[team].winner++;
+
+                if (!inR16) progressStats[team].eliminated_group++;
+                else if (!inQF) progressStats[team].eliminated_R16++;
+                else if (!inSF) progressStats[team].eliminated_QF++;
+                else if (!inF) progressStats[team].eliminated_SF++;
+                else if (!winner) progressStats[team].eliminated_F++;
+            });
+
+            // Track finalists
+            if (stageMatches.F.length > 0) {
+                 const finalMatchId = stageMatches.F[0].split(':')[0].trim().toUpperCase();
+                 const winner = knockoutWinners[finalMatchId];
+                 const loser = knockoutLosers[finalMatchId];
+                 if(winner && loser) {
+                    const finalistPair = [winner, loser].sort().join(' vs ');
+                    progressStats.finalists[finalistPair] = (progressStats.finalists[finalistPair] || 0) + 1;
+                 }
+            }
+        }
+
+        runFullTournamentButtonEl.addEventListener('click', () => {
+             if (parsedMatches.length === 0) { 
+                 tournamentWinnerContentEl.innerHTML = '<p class="text-red-500">Please parse data first.</p>';
+                 return;
+             }
+             if (knockoutBracketEl.value.trim() === '') {
+                 tournamentWinnerContentEl.innerHTML = '<p class="text-red-500">Please define the knockout bracket first.</p>';
+                 return;
+             }
+             const numSims = parseInt(numTournamentSimulationsEl.value, 10);
+             if (isNaN(numSims) || numSims <= 0) {
+                 tournamentWinnerContentEl.innerHTML = '<p class="text-red-500">Please enter a valid number of simulations for the tournament.</p>';
+                 return;
+             }
+             
+             tournamentLoaderEl.classList.remove('hidden');
+             tournamentWinnerContentEl.innerHTML = '';
+             tournamentFinalistsContent.innerHTML = '';
+             tournamentReachContent.innerHTML = '';
+             tournamentEliminationContent.innerHTML = '';
+             runFullTournamentButtonEl.disabled = true;
+
+             setTimeout(() => {
+                 const { tournamentProgress } = runSimulation(numSims, true);
+                 const margin = parseFloat(document.getElementById('tournamentMargin').value);
+                 
+                 const sortedTeams = Array.from(allTeams).sort();
+
+                 let winnerHtml = `<h3 class="text-lg font-semibold text-gray-700 mb-3">Tournament Winner</h3>
+                                   <table class="odds-table text-sm"><thead><tr><th>Team</th><th>Win Probability</th><th>Fair Odds</th><th>Bookie Odds</th></tr></thead><tbody>`;
+                 Object.entries(tournamentProgress).sort(([,a],[,b]) => b.winner - a.winner).forEach(([team, stats]) => {
+                     const prob = stats.winner / numSims;
+                     if(prob > 0) {
+                        const fairOdd = (1 / prob).toFixed(2);
+                        const bookieOdd = calculateOddWithMargin(prob, margin);
+                        winnerHtml += `<tr><td class="font-medium">${team}</td><td>${(prob * 100).toFixed(2)}%</td><td>${fairOdd}</td><td>${bookieOdd}</td></tr>`;
+                     }
+                 });
+                 winnerHtml += `</tbody></table>`;
+                 tournamentWinnerContentEl.innerHTML = winnerHtml;
+                 
+                 let finalistsHtml = `<h3 class="text-lg font-semibold text-gray-700 mt-6 mb-3">Top 20 Final Matchups</h3>
+                                  <table class="odds-table text-sm"><thead><tr><th>Matchup</th><th>Probability</th><th>Fair Odds</th><th>Bookie Odds</th></tr></thead><tbody>`;
+                 Object.entries(tournamentProgress.finalists).sort(([,a],[,b]) => b-a).slice(0, 20).forEach(([pair, count]) => {
+                     const prob = count / numSims;
+                     finalistsHtml += `<tr><td class="font-medium">${pair}</td>
+                                    <td>${(prob*100).toFixed(2)}%</td>
+                                    <td>${(1/prob).toFixed(2)}</td>
+                                    <td>${calculateOddWithMargin(prob, margin)}</td></tr>`;
+                 });
+                 finalistsHtml += `</tbody></table>`;
+                 tournamentFinalistsContent.innerHTML = finalistsHtml;
+
+                 let reachHtml = `<h3 class="text-lg font-semibold text-gray-700 mt-6 mb-3">To Reach Stage</h3>
+                                  <table class="odds-table text-sm"><thead><tr><th>Team</th><th>Final</th><th>Semi-Final</th><th>Quarter-Final</th></tr></thead><tbody>`;
+                 sortedTeams.forEach(team => {
+                     const stats = tournamentProgress[team];
+                     const probF = stats.reached_F / numSims;
+                     const probSF = stats.reached_SF / numSims;
+                     const probQF = stats.reached_QF / numSims;
+                     reachHtml += `<tr><td class="font-medium">${team}</td>
+                                    <td>${calculateOddWithMargin(probF, margin)} (${(probF*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probSF, margin)} (${(probSF*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probQF, margin)} (${(probQF*100).toFixed(1)}%)</td></tr>`;
+                 });
+                 reachHtml += `</tbody></table>`;
+                 tournamentReachContent.innerHTML = reachHtml;
+
+                let eliminationHtml = `<h3 class="text-lg font-semibold text-gray-700 mt-6 mb-3">Phase of Elimination</h3>
+                                  <table class="odds-table text-sm"><thead><tr><th>Team</th><th>Runner-up</th><th>Semi-Final</th><th>Quarter-Final</th><th>Round of 16</th><th>Group Stage</th></tr></thead><tbody>`;
+                 sortedTeams.forEach(team => {
+                     const stats = tournamentProgress[team];
+                     const probF = stats.eliminated_F / numSims;
+                     const probSF = stats.eliminated_SF / numSims;
+                     const probQF = stats.eliminated_QF / numSims;
+                     const probR16 = stats.eliminated_R16 / numSims;
+                     const probGroup = stats.eliminated_group / numSims;
+                     eliminationHtml += `<tr><td class="font-medium">${team}</td>
+                                    <td>${calculateOddWithMargin(probF, margin)} (${(probF*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probSF, margin)} (${(probSF*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probQF, margin)} (${(probQF*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probR16, margin)} (${(probR16*100).toFixed(1)}%)</td>
+                                    <td>${calculateOddWithMargin(probGroup, margin)} (${(probGroup*100).toFixed(1)}%)</td></tr>`;
+                 });
+                 eliminationHtml += `</tbody></table>`;
+                 tournamentEliminationContent.innerHTML = eliminationHtml;
+                 
+                 tournamentLoaderEl.classList.add('hidden');
+                 runFullTournamentButtonEl.disabled = false;
+             }, 50);
+        });
+
 
         // --- Display Logic (Simulator) ---
         function displayResults(aggStats, numSims) {
@@ -985,10 +1445,10 @@
         // --- Simulated Group Odds Tab Logic ---
         function calculateOddWithMargin(trueProb, marginPercent) {
              if (trueProb <= 0) return "N/A";
-             const marginFactor = 1 + (marginPercent / 100);
-             //This formula correctly shortens the odds.
-             const bookmakerProb = trueProb / (1-marginPercent/100) ;
+             const marginDecimal = marginPercent / 100;
+             const bookmakerProb = trueProb / (1 - marginDecimal);
              if (bookmakerProb > 1) { 
+                 // Cannot have probability > 1, so cap at fair odds.
                  return (1 / trueProb).toFixed(2);
              }
              return (1 / bookmakerProb).toFixed(2);
@@ -1015,44 +1475,12 @@
             // Trigger change to repopulate team select if group is still valid
             const event = new Event('change');
             simGroupSelectEl.dispatchEvent(event);
-            simTeamSelectEl.value = currentTeam;
-            simTeamSelectEl.dispatchEvent(event);
+            // Manually restore team selection after team dropdown is repopulated
+            setTimeout(() => {
+                simTeamSelectEl.value = currentTeam;
+                simTeamSelectEl.dispatchEvent(event);
+            }, 0);
         }
-
-        // *** FIX START ***
-        // Moved this function to the global scope so it can be called from multiple places.
-        const displayAvgAndOU = (dataSims, expectedElId, resultElId) => {
-            const resultElement = document.getElementById(resultElId);
-            const expectedElement = document.getElementById(expectedElId);
-            const ouMarginPercent = parseFloat(document.getElementById('ouBookieMargin').value)
-            if (isNaN(ouMarginPercent) || ouMarginPercent < 0) return;
-            
-            if (dataSims && dataSims.length > 0 && currentNumSims > 0) {
-                const avg = dataSims.reduce((a, b) => a + b, 0) / currentNumSims;
-                expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
-
-                const centerLine = Math.floor(avg) + 0.5;
-                const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l >= 0.5); 
-                let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
-
-                lines.forEach(line => {
-                     const overCount = dataSims.filter(val => val > line).length;
-                     const underCount = dataSims.filter(val => val < line).length;
-                     const probOver = overCount / currentNumSims;
-                     const probUnder = underCount / currentNumSims;
-                     const oddOver = calculateOddWithMargin(probOver, ouMarginPercent);
-                     const oddUnder = calculateOddWithMargin(probUnder, ouMarginPercent);
-                     ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td></tr>`;
-                });
-                 ouHtml += `</tbody></table>`;
-                 resultElement.innerHTML = ouHtml;
-
-            } else {
-                 if(expectedElement) expectedElement.textContent = '';
-                 if(resultElement) resultElement.innerHTML = '';
-            }
-        };
-        // *** FIX END ***
 
         simGroupSelectEl.addEventListener('change', () => {
             const selectedGroupKey = simGroupSelectEl.value;
@@ -1074,7 +1502,7 @@
                 simTeamSelectEl.disabled = true;
                 generateGroupCsvButtonEl.disabled = true;
             }
-             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
+             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouLastPlacePtsResult', 'expectedLastPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouLastPlaceGFResult', 'expectedLastPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '';
              });
@@ -1136,10 +1564,24 @@
             
             let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Market Odds for Group ${selectedGroupKey} (Margin: ${mainMarginPercent}%)</h3>`;
             
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team Standings Odds (1st/2nd/3rd/4th):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th><th>4th Place</th></tr></thead><tbody>`;
+            const numTeams = teams.length;
+            let standingsHeader = `<th>Team</th>`;
+            const posSuffix = (i) => {
+                if (i === 11 || i === 12 || i === 13) return 'th';
+                const lastDigit = i % 10;
+                if (lastDigit === 1) return 'st';
+                if (lastDigit === 2) return 'nd';
+                if (lastDigit === 3) return 'rd';
+                return 'th';
+            };
+            for (let i = 1; i <= numTeams; i++) {
+                standingsHeader += `<th>${i}${posSuffix(i)} Place</th>`;
+            }
+
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team Standings Odds:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr>${standingsHeader}</tr></thead><tbody>`;
             teams.sort().forEach(tN=>{
                 html += `<tr><td class="font-medium">${tN}</td>`;
-                for(let i = 0; i < 4; i++) {
+                for(let i = 0; i < numTeams; i++) { // Loop to dynamic size
                     const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?(tS.posCounts[i]||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginPercent);
                     html += `<td>${o} <span class="text-gray-400">(${(tP*100).toFixed(1)}%)</span></td>`;
                 }
@@ -1176,9 +1618,9 @@
 
             displayAvgAndOU(groupData.groupTotalGoalsSims, 'expectedTotalGroupGoals', 'ouTotalGroupGoalsResult');
             displayAvgAndOU(groupData.firstPlacePtsSims, 'expectedFirstPlacePts', 'ouFirstPlacePtsResult');
-            displayAvgAndOU(groupData.fourthPlacePtsSims, 'expectedFourthPlacePts', 'ouFourthPlacePtsResult');
+            displayAvgAndOU(groupData.lastPlacePtsSims, 'expectedLastPlacePts', 'ouLastPlacePtsResult');
             displayAvgAndOU(groupData.firstPlaceGFSims, 'expectedFirstPlaceGF', 'ouFirstPlaceGFResult');
-            displayAvgAndOU(groupData.fourthPlaceGFSims, 'expectedFourthPlaceGF', 'ouFourthPlaceGFResult');
+            displayAvgAndOU(groupData.lastPlaceGFSims, 'expectedLastPlaceGF', 'ouLastPlaceGFResult');
             displayAvgAndOU(groupData.bttsCountSims, 'expectedBttsMatches', 'ouBttsMatchesResult');
             displayAvgAndOU(groupData.over25CountSims, 'expectedOver25Matches', 'ouOver25MatchesResult');
             displayAvgAndOU(groupData.zeroZeroCountSims, 'expectedZeroZeroMatches', 'ouZeroZeroMatchesResult');
@@ -1235,11 +1677,13 @@
         clearButtonEl.addEventListener('click', () => {
             matchDataEl.value = ""; 
             liveResultsDataEl.value = "";
+            eloDataEl.value = "";
             numSimulationsEl.value = "10000"; 
             statusAreaEl.innerHTML = ""; 
             resultsContentEl.innerHTML = "Results will appear here...";
-            parsedMatches=[]; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0; liveResults = {};
+            parsedMatches=[]; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0; liveResults = {}; teamEloRatings = {};
             runButtonEl.disabled=true; 
+            runFullTournamentButtonEl.disabled = true;
             loaderEl.classList.add('hidden'); 
             parseButtonEl.disabled=false;
             csvFileInputEl.value=null; 
@@ -1250,10 +1694,58 @@
             customProbInputsContainerEl.classList.add('hidden');
             document.getElementById('teamSpecificOddsContainer').classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = translations[currentLanguage]['custom-odds-placeholder'];
-             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouFourthPlacePtsResult', 'expectedFourthPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouFourthPlaceGFResult', 'expectedFourthPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
+             ['ouTotalGroupGoalsResult', 'expectedTotalGroupGoals', 'ouFirstPlacePtsResult', 'expectedFirstPlacePts', 'ouLastPlacePtsResult', 'expectedLastPlacePts', 'ouFirstPlaceGFResult', 'expectedFirstPlaceGF', 'ouLastPlaceGFResult', 'expectedLastPlaceGF', 'ouBttsMatchesResult', 'expectedBttsMatches', 'ouOver25MatchesResult', 'expectedOver25Matches', 'ouZeroZeroMatchesResult', 'expectedZeroZeroMatches'].forEach(id => {
                  const el = document.getElementById(id);
                  if (el) el.innerHTML = '';
              });
+        });
+
+        // --- Save/Load Logic ---
+        saveButtonEl.addEventListener('click', () => {
+            const scenario = {
+                model: currentModel,
+                matchData: matchDataEl.value,
+                eloData: eloDataEl.value,
+                liveResultsData: liveResultsDataEl.value,
+                numSimulations: numSimulationsEl.value,
+                numTournamentSimulations: numTournamentSimulationsEl.value,
+                knockoutBracket: knockoutBracketEl.value
+            };
+            const blob = new Blob([JSON.stringify(scenario, null, 2)], { type: 'application/json' });
+            const link = document.createElement("a");
+            const date = new Date().toISOString().slice(0, 10);
+            link.download = `scenario_${date}.json`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+            statusAreaEl.innerHTML = `<p class="text-green-500">Scenario saved successfully!</p>`;
+        });
+
+        loadFileInputEl.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const scenario = JSON.parse(e.target.result);
+                    switchModel(scenario.model || 'odds');
+                    matchDataEl.value = scenario.matchData || '';
+                    eloDataEl.value = scenario.eloData || '';
+                    liveResultsDataEl.value = scenario.liveResultsData || '';
+                    numSimulationsEl.value = scenario.numSimulations || '10000';
+                    numTournamentSimulationsEl.value = scenario.numTournamentSimulations || '10000';
+                    knockoutBracketEl.value = scenario.knockoutBracket || '';
+                    statusAreaEl.innerHTML = '<p class="text-blue-500">Scenario loaded successfully. Please parse the new data.</p>';
+                } catch (err) {
+                     statusAreaEl.innerHTML = `<p class="text-red-500">Error reading scenario file. Make sure it's a valid JSON file from this app. Error: ${err.message}</p>`;
+                }
+            };
+            reader.onerror = () => {
+                 statusAreaEl.innerHTML = `<p class="text-red-500">Error reading file.</p>`;
+            };
+            reader.readAsText(file);
+            loadFileInputEl.value = ''; // Reset file input
         });
 
         // --- Initial Setup ---
@@ -1295,7 +1787,6 @@
 
             const teamData = simulationAggStats[groupKey]?.[teamName];
             if (!teamData) { alert("No simulation data found for the selected team."); return; }
-            const marginDecimal = marginPercent / 100;
 
             let csvContent = `${translations[lang]['csv-date']},${translations[lang]['csv-time']},${translations[lang]['csv-market']},${translations[lang]['csv-odd1']},${translations[lang]['csv-odd2']},${translations[lang]['csv-odd3']}\n`;
             const date = "15.6.2025"; const time = "02:00";
@@ -1341,7 +1832,6 @@
             const groupData = simulationAggStats[groupKey];
             const teams = groupTeamNames[groupKey] || [];
             if (!groupData || teams.length === 0) { alert("No simulation data found for the selected group."); return; }
-            const marginDecimal = marginPercent / 100;
 
             let csvContent = `${translations[lang]['csv-league-name']}: Grupa ${groupKey}\n`;
             const date = "15.6.2025"; const time = "02:00";
@@ -1361,7 +1851,7 @@
                 }
             };
             addOUCsv(groupData.firstPlacePtsSims, 'csv-1st-place-team', [4.5, 6.5, 7.5]);
-            addOUCsv(groupData.fourthPlacePtsSims, 'csv-last-place-team', [0.5, 1.5, 2.5]);
+            addOUCsv(groupData.lastPlacePtsSims, 'csv-last-place-team', [0.5, 1.5, 2.5]);
 
             const processEntries = (entries, marketFn, submarketKey) => {
                  entries.sort(([,a],[,b])=>b-a).forEach(([key, count]) => {
