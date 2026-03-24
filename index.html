@@ -28,6 +28,16 @@
                     <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
                 </select>
                 <p class="mt-1 text-xs text-gray-500">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
+                <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900">
+                    <p class="font-semibold mb-1">Elo CSV supported format</p>
+                    <p>Accepted delimiters: comma, semicolon, or tab.</p>
+                    <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
+                    <p class="mt-1">Example rows:</p>
+                    <pre class="mt-1 whitespace-pre-wrap">GROUP,TEAM,ELO
+A,Germany,1942
+A,Scotland,1730
+B,Spain,2036</pre>
+                </div>
             </div>
             <div class="mb-4">
                 <label for="csvFileInput" class="file-input-button">Import CSV File</label>
@@ -52,7 +62,8 @@
                     Elo CSV format: GROUP,TEAM,ELO (header row optional).<br/>
                     Example:<br/>
                     A,Germany,1942<br/>
-                    A,Scotland,1730
+                    A,Scotland,1730<br/>
+                    Delimiters supported: comma, semicolon, tab.
                 </p>
                 <label for="eloData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Elo Data:</label>
                 <textarea id="eloData" rows="8" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
