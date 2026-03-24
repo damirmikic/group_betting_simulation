@@ -142,6 +142,11 @@
                 <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
                 <input type="number" id="numSimulations" value="10000" class="w-full md:w-1/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
             </div>
+            <div class="mb-6">
+                <label for="tieBreakPreset" class="block text-sm font-medium text-gray-700 mb-1">Standings Tie-Break Rules:</label>
+                <select id="tieBreakPreset" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></select>
+                <p id="tieBreakPresetHelp" class="mt-1 text-xs text-gray-500"></p>
+            </div>
             <div class="flex flex-col sm:flex-row gap-4 mb-6">
                 <button id="parseButton" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">1. Parse & Validate Data</button>
                 <button id="runButton" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>2. Run Simulation</button>
@@ -283,6 +288,54 @@
         const customProbAndOddResultAreaEl = document.getElementById('customProbAndOddResultArea');
         const generateTeamCsvButtonEl = document.getElementById('generateTeamCsvButton'); 
         const generateGroupCsvButtonEl = document.getElementById('generateGroupCsvButton');
+        const tieBreakPresetEl = document.getElementById('tieBreakPreset');
+        const tieBreakPresetHelpEl = document.getElementById('tieBreakPresetHelp');
+
+        const tieBreakRulePresets = {
+            uefa_competition: {
+                label: "UEFA-style (H2H before overall GD)",
+                description: "Pts → H2H Pts → H2H GD → H2H GF → GD → GF → Wins → Team name",
+                criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'wins', 'name']
+            },
+            fifa_competition: {
+                label: "FIFA-style (GD before H2H)",
+                description: "Pts → GD → GF → H2H Pts → H2H GD → H2H GF → Wins → Team name",
+                criteriaAfterPoints: ['gd', 'gf', 'h2hPts', 'h2hGd', 'h2hGf', 'wins', 'name']
+            },
+            domestic_standard: {
+                label: "League standard (Pts/GD/GF)",
+                description: "Pts → GD → GF → Wins → Team name",
+                criteriaAfterPoints: ['gd', 'gf', 'wins', 'name']
+            },
+            head_to_head_first: {
+                label: "Head-to-head first",
+                description: "Pts → H2H Pts → H2H GD → H2H GF → GD → GF → Team name",
+                criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'name']
+            },
+            goals_scored_priority: {
+                label: "Goals-scored priority",
+                description: "Pts → GF → GD → Wins → Team name",
+                criteriaAfterPoints: ['gf', 'gd', 'wins', 'name']
+            }
+        };
+
+        function populateTieBreakPresets() {
+            tieBreakPresetEl.innerHTML = '';
+            Object.entries(tieBreakRulePresets).forEach(([key, preset]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = preset.label;
+                tieBreakPresetEl.appendChild(option);
+            });
+            tieBreakPresetEl.value = 'uefa_competition';
+            updateTieBreakPresetDescription();
+        }
+
+        function updateTieBreakPresetDescription() {
+            const preset = tieBreakRulePresets[tieBreakPresetEl.value];
+            tieBreakPresetHelpEl.textContent = preset ? preset.description : '';
+        }
+        tieBreakPresetEl.addEventListener('change', updateTieBreakPresetDescription);
 
 
         // --- CSV File Input ---
@@ -637,10 +690,12 @@
                     const sTS={}; 
                     tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0}); 
                     let cGTG=0;
+                    const simulatedGroupMatches = [];
             
                     cGMs.forEach(m=>{
                         const g1=poissonRandom(m.lambda1); 
                         const g2=poissonRandom(m.lambda2); 
+                        simulatedGroupMatches.push({ team1: m.team1, team2: m.team2, g1, g2 });
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
                         cGTG+=(g1+g2); 
@@ -650,11 +705,11 @@
                     });
             
                     if(aggStats[gK]) aggStats[gK].groupTotalGoalsSims.push(cGTG); 
-                    const rTs=tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}).sort((a,b)=>{
-                        const scoreA = a.pts + (a.gd / 100) + (a.gf / 1000) + (Math.random() / 10000);
-                        const scoreB = b.pts + (b.gd / 100) + (b.gf / 1000) + (Math.random() / 10000);
-                        return scoreB - scoreA;
-                    });
+                    const rTs = sortStandingsWithTieBreakers(
+                        tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}),
+                        simulatedGroupMatches,
+                        tieBreakRulePresets[tieBreakPresetEl.value] || tieBreakRulePresets.uefa_competition
+                    );
             
                     let mGF=-1,mGA=-1; 
                     let groupHad9Pts=false, groupHad0Pts=false; 
@@ -699,6 +754,85 @@
                 }
             }
             return aggStats;
+        }
+
+        function computeHeadToHeadStatsForTeams(teamNames, simulatedMatches) {
+            const teamSet = new Set(teamNames);
+            const h2hStats = {};
+            teamNames.forEach(name => {
+                h2hStats[name] = { h2hPts: 0, h2hGf: 0, h2hGa: 0, h2hGd: 0, h2hWins: 0 };
+            });
+
+            simulatedMatches.forEach(({ team1, team2, g1, g2 }) => {
+                if (!teamSet.has(team1) || !teamSet.has(team2)) return;
+
+                h2hStats[team1].h2hGf += g1;
+                h2hStats[team1].h2hGa += g2;
+                h2hStats[team2].h2hGf += g2;
+                h2hStats[team2].h2hGa += g1;
+
+                if (g1 > g2) {
+                    h2hStats[team1].h2hPts += 3;
+                    h2hStats[team1].h2hWins += 1;
+                } else if (g2 > g1) {
+                    h2hStats[team2].h2hPts += 3;
+                    h2hStats[team2].h2hWins += 1;
+                } else {
+                    h2hStats[team1].h2hPts += 1;
+                    h2hStats[team2].h2hPts += 1;
+                }
+            });
+
+            teamNames.forEach(name => {
+                h2hStats[name].h2hGd = h2hStats[name].h2hGf - h2hStats[name].h2hGa;
+            });
+            return h2hStats;
+        }
+
+        function compareTeamsByCriteria(teamA, teamB, criteria, h2hStats) {
+            for (const criterion of criteria) {
+                if (criterion === 'name') {
+                    const byName = teamA.name.localeCompare(teamB.name);
+                    if (byName !== 0) return byName;
+                    continue;
+                }
+
+                const sourceA = criterion.startsWith('h2h') ? (h2hStats?.[teamA.name] || {}) : teamA;
+                const sourceB = criterion.startsWith('h2h') ? (h2hStats?.[teamB.name] || {}) : teamB;
+                const aVal = sourceA[criterion] || 0;
+                const bVal = sourceB[criterion] || 0;
+                if (aVal !== bVal) return bVal - aVal;
+            }
+            return teamA.name.localeCompare(teamB.name);
+        }
+
+        function sortStandingsWithTieBreakers(teams, simulatedMatches, selectedPreset) {
+            const preset = selectedPreset || tieBreakRulePresets.uefa_competition;
+            const criteriaAfterPoints = preset.criteriaAfterPoints || ['gd', 'gf', 'wins', 'name'];
+            const sortedByPoints = [...teams].sort((a, b) => {
+                if (a.pts !== b.pts) return b.pts - a.pts;
+                return a.name.localeCompare(b.name);
+            });
+
+            const ranked = [];
+            let idx = 0;
+            while (idx < sortedByPoints.length) {
+                const tiedSegment = [sortedByPoints[idx]];
+                let nextIdx = idx + 1;
+                while (nextIdx < sortedByPoints.length && sortedByPoints[nextIdx].pts === sortedByPoints[idx].pts) {
+                    tiedSegment.push(sortedByPoints[nextIdx]);
+                    nextIdx++;
+                }
+
+                if (tiedSegment.length > 1) {
+                    const teamNames = tiedSegment.map(t => t.name);
+                    const h2hStats = computeHeadToHeadStatsForTeams(teamNames, simulatedMatches);
+                    tiedSegment.sort((a, b) => compareTeamsByCriteria(a, b, criteriaAfterPoints, h2hStats));
+                }
+                ranked.push(...tiedSegment);
+                idx = nextIdx;
+            }
+            return ranked;
         }
 
         // --- Display Logic (Simulator) ---
@@ -955,6 +1089,7 @@ B Albania vs Spain 10.00 5.50 1.30 2.00 1.80
 B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
 
         window.openTab = openTab; 
+        populateTieBreakPresets();
         simCustomOperatorEl.addEventListener('change', () => { 
             if (simCustomOperatorEl.value === 'between') simCustomValue2El.classList.remove('hidden');
             else simCustomValue2El.classList.add('hidden');
