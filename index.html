@@ -26,12 +26,14 @@
                 <select id="inputMode" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="odds">Match odds input (existing mode)</option>
                     <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
+                    <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
                 </select>
                 <p class="mt-1 text-xs text-gray-500">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
                 <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900">
                     <p class="font-semibold mb-1">Elo CSV supported format</p>
                     <p>Accepted delimiters: comma, semicolon, or tab.</p>
                     <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
+                    <p>Hybrid mode uses your provided odds matches, then fills missing group fixtures from Elo.</p>
                     <p class="mt-1">Example rows:</p>
                     <pre class="mt-1 whitespace-pre-wrap">GROUP,TEAM,ELO
 A,Germany,1942

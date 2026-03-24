@@ -111,12 +111,16 @@
         });
 
         function updateInputModeUi() {
-            const isEloMode = inputModeEl.value === 'elo';
+            const mode = inputModeEl.value;
+            const isEloMode = mode === 'elo';
+            const isHybridMode = mode === 'hybrid';
             matchDataEl.disabled = isEloMode;
             csvFileInputEl.disabled = isEloMode;
-            parseButtonEl.textContent = isEloMode ? '1. Parse Elo & Build Fixtures' : '1. Parse & Validate Data';
-            eloDataEl.disabled = !isEloMode;
-            eloCsvFileInputEl.disabled = !isEloMode;
+            eloDataEl.disabled = mode === 'odds';
+            eloCsvFileInputEl.disabled = mode === 'odds';
+            parseButtonEl.textContent = isEloMode
+                ? '1. Parse Elo & Build Fixtures'
+                : (isHybridMode ? '1. Parse Hybrid Data' : '1. Parse & Validate Data');
         }
         inputModeEl.addEventListener('change', updateInputModeUi);
         
@@ -356,6 +360,19 @@
             return { lineNum, group, team1: team1Name, team2: team2Name, p1, px: pDraw, p2, lambda1, lambda2 };
         }
 
+        function buildMatchPairKey(team1, team2) {
+            return [team1, team2].sort((a, b) => a.localeCompare(b)).join('||');
+        }
+
+        function captureCurrentParsedState() {
+            return {
+                parsedMatches: parsedMatches.map(m => ({ ...m })),
+                groupedMatches: Object.fromEntries(Object.entries(groupedMatches).map(([group, matches]) => [group, matches.map(m => ({ ...m }))])),
+                groupTeamNames: Object.fromEntries(Object.entries(groupTeamNames).map(([group, teams]) => [group, [...teams]])),
+                allTeams: new Set([...allTeams])
+            };
+        }
+
         function parseOddsInputData() {
             const data = matchDataEl.value.trim();
             if (!data) return { errors: ['Error: Match data empty.'] };
@@ -489,13 +506,88 @@
             return { errors, warnings };
         }
 
+        function parseHybridInputData() {
+            const oddsResult = parseOddsInputData();
+            const oddsState = captureCurrentParsedState();
+            const eloResult = parseEloInputData();
+            const eloState = captureCurrentParsedState();
+
+            const errors = [
+                ...oddsResult.errors.map(e => `[Odds] ${e}`),
+                ...eloResult.errors.map(e => `[Elo] ${e}`)
+            ];
+            const warnings = [
+                ...oddsResult.warnings.map(w => `[Odds] ${w}`),
+                ...eloResult.warnings.map(w => `[Elo] ${w}`)
+            ];
+
+            if (errors.length > 0) {
+                parsedMatches = [];
+                allTeams = new Set();
+                groupedMatches = {};
+                groupTeamNames = {};
+                return { errors, warnings };
+            }
+
+            parsedMatches = [];
+            allTeams = new Set();
+            groupedMatches = {};
+            groupTeamNames = {};
+
+            const groupKeys = new Set([...Object.keys(oddsState.groupedMatches), ...Object.keys(eloState.groupedMatches)]);
+            [...groupKeys].forEach(group => {
+                const oddsMatches = oddsState.groupedMatches[group] || [];
+                const eloMatches = eloState.groupedMatches[group] || [];
+                const teams = eloState.groupTeamNames[group] || oddsState.groupTeamNames[group] || [];
+                const matchByPair = {};
+                groupedMatches[group] = [];
+                groupTeamNames[group] = [...teams];
+                teams.forEach(t => allTeams.add(t));
+
+                oddsMatches.forEach(m => {
+                    const key = buildMatchPairKey(m.team1, m.team2);
+                    if (matchByPair[key]) {
+                        warnings.push(`[Hybrid] Duplicate odds pair in group ${group}: ${m.team1} vs ${m.team2}. Keeping first.`);
+                        return;
+                    }
+                    matchByPair[key] = true;
+                    groupedMatches[group].push({ ...m, lineNum: parsedMatches.length + 1 });
+                    parsedMatches.push(groupedMatches[group][groupedMatches[group].length - 1]);
+                    allTeams.add(m.team1); allTeams.add(m.team2);
+                });
+
+                eloMatches.forEach(m => {
+                    const key = buildMatchPairKey(m.team1, m.team2);
+                    if (matchByPair[key]) return;
+                    matchByPair[key] = true;
+                    groupedMatches[group].push({ ...m, lineNum: parsedMatches.length + 1 });
+                    parsedMatches.push(groupedMatches[group][groupedMatches[group].length - 1]);
+                    allTeams.add(m.team1); allTeams.add(m.team2);
+                });
+
+                if ((groupTeamNames[group] || []).length === 4 && groupedMatches[group].length !== 6) {
+                    warnings.push(`[Hybrid] Gr ${group}: ${groupedMatches[group].length} matches after fill (exp 6).`);
+                }
+            });
+
+            return { errors, warnings };
+        }
+
 
         // --- Parsing Logic (Simulator) ---
         parseButtonEl.addEventListener('click', () => {
             const mode = inputModeEl.value;
-            const { errors, warnings } = mode === 'elo' ? parseEloInputData() : parseOddsInputData();
+            const { errors, warnings } = mode === 'elo'
+                ? parseEloInputData()
+                : (mode === 'hybrid' ? parseHybridInputData() : parseOddsInputData());
             if (errors.length > 0) { statusAreaEl.innerHTML = `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = true; }
-            else { statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${mode === 'elo' ? 'Elo-generated fixtures' : 'odds input'}).</p>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = false; resultsContentEl.innerHTML = "Parsed. Ready for sim."; }
+            else {
+                const modeLabel = mode === 'elo' ? 'Elo-generated fixtures' : (mode === 'hybrid' ? 'hybrid (odds + Elo fill)' : 'odds input');
+                statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${modeLabel}).</p>`;
+                if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`;
+                runButtonEl.disabled = false;
+                resultsContentEl.innerHTML = "Parsed. Ready for sim.";
+            }
         });
 
 
