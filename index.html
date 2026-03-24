@@ -21,6 +21,26 @@
 
         <div id="simulatorTab" class="tab-content active">
             <p class="text-gray-600 mb-4 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
+            <div class="mb-6">
+                <label for="inputMode" class="block text-sm font-medium text-gray-700 mb-1">Simulation Input Mode:</label>
+                <select id="inputMode" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="odds">Match odds input (existing mode)</option>
+                    <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
+                    <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-500">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
+                <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900">
+                    <p class="font-semibold mb-1">Elo CSV supported format</p>
+                    <p>Accepted delimiters: comma, semicolon, or tab.</p>
+                    <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
+                    <p>Hybrid mode uses your provided odds matches, then fills missing group fixtures from Elo.</p>
+                    <p class="mt-1">Example rows:</p>
+                    <pre class="mt-1 whitespace-pre-wrap">GROUP,TEAM,ELO
+A,Germany,1942
+A,Scotland,1730
+B,Spain,2036</pre>
+                </div>
+            </div>
             <div class="mb-4">
                 <label for="csvFileInput" class="file-input-button">Import CSV File</label>
                 <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
@@ -35,6 +55,20 @@
             <div class="mb-6">
                 <label for="matchData" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
                 <textarea id="matchData" rows="10" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+            </div>
+            <div class="mb-6">
+                <label for="eloCsvFileInput" class="file-input-button">Import Elo CSV</label>
+                <input type="file" id="eloCsvFileInput" class="hidden-file-input" accept=".csv">
+                <span id="eloCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
+                <p class="mt-1 text-xs text-gray-500">
+                    Elo CSV format: GROUP,TEAM,ELO (header row optional).<br/>
+                    Example:<br/>
+                    A,Germany,1942<br/>
+                    A,Scotland,1730<br/>
+                    Delimiters supported: comma, semicolon, tab.
+                </p>
+                <label for="eloData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Elo Data:</label>
+                <textarea id="eloData" rows="8" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
             </div>
             <div class="mb-6">
                 <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
