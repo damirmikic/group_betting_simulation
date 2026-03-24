@@ -24,6 +24,8 @@
         const parseButtonEl = document.getElementById('parseButton'), runButtonEl = document.getElementById('runButton'), clearButtonEl = document.getElementById('clearButton');
         const statusAreaEl = document.getElementById('statusArea'), loaderEl = document.getElementById('loader'), resultsContentEl = document.getElementById('resultsContent');
         const csvFileInputEl = document.getElementById('csvFileInput'), csvFileNameEl = document.getElementById('csvFileName');
+        const eloCsvFileInputEl = document.getElementById('eloCsvFileInput'), eloCsvFileNameEl = document.getElementById('eloCsvFileName');
+        const eloDataEl = document.getElementById('eloData'), inputModeEl = document.getElementById('inputMode');
         const simGroupSelectEl = document.getElementById('simGroupSelect'), simBookieMarginEl = document.getElementById('simBookieMargin');
         const showSimulatedOddsButtonEl = document.getElementById('showSimulatedOddsButton');
         const calculatedOddsResultContentEl = document.getElementById('calculatedOddsResultContent'), simulatedOddsStatusEl = document.getElementById('simulatedOddsStatus');
@@ -96,6 +98,27 @@
                 reader.readAsText(file);
             } else { csvFileNameEl.textContent = "No file selected."; }
         });
+
+        eloCsvFileInputEl.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                eloCsvFileNameEl.textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = (e) => { eloDataEl.value = e.target.result; statusAreaEl.innerHTML = `<p class="text-blue-500">Elo CSV loaded. Click "Parse & Validate Data".</p>`; };
+                reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading Elo file: ${e.target.error.name}</p>`; eloCsvFileNameEl.textContent = "No file selected."; };
+                reader.readAsText(file);
+            } else { eloCsvFileNameEl.textContent = "No file selected."; }
+        });
+
+        function updateInputModeUi() {
+            const isEloMode = inputModeEl.value === 'elo';
+            matchDataEl.disabled = isEloMode;
+            csvFileInputEl.disabled = isEloMode;
+            parseButtonEl.textContent = isEloMode ? '1. Parse Elo & Build Fixtures' : '1. Parse & Validate Data';
+            eloDataEl.disabled = !isEloMode;
+            eloCsvFileInputEl.disabled = !isEloMode;
+        }
+        inputModeEl.addEventListener('change', updateInputModeUi);
         
         // --- xG Calculation & Helpers ---
         function factorialJs(n) {
@@ -308,12 +331,41 @@
             document.getElementById('expectedFourthPlaceGF').textContent = '';
         }
 
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(max, value));
+        }
 
-        // --- Parsing Logic (Simulator) ---
-        parseButtonEl.addEventListener('click', () => {
-            const data = matchDataEl.value.trim(); if (!data) { statusAreaEl.innerHTML = '<p class="text-red-500">Error: Match data empty.</p>'; return; }
-            const lines = data.split('\n'); parsedMatches = []; allTeams.clear(); groupedMatches = {}; groupTeamNames = {};
+        function eloProbNoDraw(eloA, eloB) {
+            const diff = eloA - eloB;
+            return 1 / (1 + Math.pow(10, -diff / 400));
+        }
+
+        function deriveMatchFromElo(group, team1Name, team2Name, elo1, elo2, lineNum) {
+            const diffAbs = Math.abs(elo1 - elo2);
+            const p1NoDraw = eloProbNoDraw(elo1, elo2);
+            const pDraw = clamp(0.20 + 0.11 * Math.exp(-diffAbs / 250), 0.18, 0.31);
+            const p1 = (1 - pDraw) * p1NoDraw;
+            const p2 = (1 - pDraw) * (1 - p1NoDraw);
+
+            const totalGoals = 2.35 + Math.min(0.45, diffAbs / 900);
+            const strength1 = p1 + 0.5 * pDraw;
+            const strength2 = p2 + 0.5 * pDraw;
+            const lambda1 = Math.max(0.05, totalGoals * (strength1 / (strength1 + strength2)));
+            const lambda2 = Math.max(0.05, totalGoals * (strength2 / (strength1 + strength2)));
+
+            return { lineNum, group, team1: team1Name, team2: team2Name, p1, px: pDraw, p2, lambda1, lambda2 };
+        }
+
+        function parseOddsInputData() {
+            const data = matchDataEl.value.trim();
+            if (!data) return { errors: ['Error: Match data empty.'] };
+            const lines = data.split('\n');
+            parsedMatches = [];
+            allTeams.clear();
+            groupedMatches = {};
+            groupTeamNames = {};
             let errors = [], warnings = [];
+
             lines.forEach((line, index) => {
                 line = line.trim(); if (!line || line.startsWith('#')) return;
                 const delimitedParts = getDelimitedParts(line);
@@ -323,14 +375,14 @@
                 let group, team1Name, team2Name, oddsStrings;
                 if (isCsvLike) {
                     const vsIdx = parts.indexOf('vs');
-                    if (vsIdx !== -1) { 
+                    if (vsIdx !== -1) {
                         if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV 'vs'): Empty T names. L:"${line}"`); return; }}
                         else { errors.push(`L${index+1}(CSV 'vs'): 'vs' wrong pos/few odds. L:"${line}"`); return; }
-                    } else { 
+                    } else {
                         if (parts.length >= 8) { group = parts[0]; team1Name = parts[1]; team2Name = parts[2]; oddsStrings = parts.slice(3, 8); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV no 'vs'): Empty T names. L:"${line}"`); return; }}
                         else { errors.push(`L${index+1}(CSV no 'vs'): <8 cols. Exp G,T1,T2,O1,OX,O2,OU_U,OU_O. Got ${parts.length}. L:"${line}"`); return; }
                     }
-                } else { 
+                } else {
                     const vsIdx = parts.indexOf('vs');
                     if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(Space): Empty T names. L:"${line}"`); return; }}
                     else { errors.push(`L${index+1}(Space): 'vs' issue/few odds. Exp G T1 vs T2 O1 OX O2 OU_U OU_O. L:"${line}"`); return; }
@@ -339,9 +391,8 @@
                 const odds = oddsStrings.map(parseFloat);
                 if (odds.some(isNaN)) { errors.push(`L${index+1}: Invalid odds. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
                 if (odds.some(o => o <= 0)) { errors.push(`L${index+1}: Odds must be >0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
-                
-                const [o1, ox, o2, oUnder25, oOver25] = odds;
 
+                const [o1, ox, o2, oUnder25, oOver25] = odds;
                 const sumInv1X2 = (1/o1)+(1/ox)+(1/o2); if (sumInv1X2 === 0) { errors.push(`L${index+1}: Sum inv 1X2 odds 0. L:"${line}"`); return; }
                 const p1_market=(1/o1)/sumInv1X2, px_market=(1/ox)/sumInv1X2, p2_market=(1/o2)/sumInv1X2;
 
@@ -351,8 +402,8 @@
 
                 if (isNaN(lambda1) || isNaN(lambda2) || lambda1 <=0 || lambda2 <=0) {
                    warnings.push(`L${index+1}: xG calc fail/non-positive for ${team1Name}v${team2Name}. Defaulting. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
-                   const p_under_fb = (1/oUnder25) / ((1/oOver25) + (1/oUnder25)); 
-                   const lt_fb_simple_approx = 2.5; 
+                   const p_under_fb = (1/oUnder25) / ((1/oOver25) + (1/oUnder25));
+                   const lt_fb_simple_approx = 2.5;
                    const s1_fb = p1_market + 0.5 * px_market;
                    const s2_fb = p2_market + 0.5 * px_market;
                    if(s1_fb + s2_fb > 0){
@@ -364,20 +415,87 @@
                    lambda1 = Math.max(0.05, lambda1); lambda2 = Math.max(0.05, lambda2);
                 }
 
-                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, 
-                                p1: p1_market, px: px_market, p2: p2_market, 
-                                lambda1, lambda2 };
+                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2 };
                 parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
                 if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
                 groupedMatches[group].push(match); groupTeamNames[group].add(team1Name); groupTeamNames[group].add(team2Name);
             });
+
             for (const group in groupTeamNames) {
                 if (groupTeamNames[group].size !== 4) warnings.push(`Gr ${group}: ${groupTeamNames[group].size} teams (exp 4).`);
                 if (groupedMatches[group] && groupedMatches[group].length !== 6 && groupTeamNames[group].size === 4) warnings.push(`Gr ${group}: ${groupedMatches[group].length} matches (exp 6).`);
                 groupTeamNames[group] = Array.from(groupTeamNames[group]);
             }
+
+            return { errors, warnings };
+        }
+
+        function parseEloInputData() {
+            const data = eloDataEl.value.trim();
+            if (!data) return { errors: ['Error: Elo data empty.'] };
+            const lines = data.split('\n');
+            parsedMatches = [];
+            allTeams.clear();
+            groupedMatches = {};
+            groupTeamNames = {};
+            const teamRatingsByGroup = {};
+            let errors = [], warnings = [];
+
+            lines.forEach((rawLine, index) => {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('#')) return;
+                const parts = getDelimitedParts(line) || line.split(/\s+/).map(p => p.trim());
+                if (parts.length < 3) {
+                    errors.push(`L${index+1}: Expected GROUP,TEAM,ELO. Got "${rawLine}"`);
+                    return;
+                }
+                const group = (parts[0] || '').trim();
+                const team = (parts[1] || '').trim();
+                const elo = parseFloat(parts[2]);
+
+                const maybeHeader = group.toLowerCase() === 'group' && team.toLowerCase() === 'team' && Number.isNaN(elo);
+                if (maybeHeader) return;
+
+                if (!group || !team || Number.isNaN(elo)) {
+                    errors.push(`L${index+1}: Invalid GROUP/TEAM/ELO. Got "${rawLine}"`);
+                    return;
+                }
+                if (!teamRatingsByGroup[group]) teamRatingsByGroup[group] = {};
+                if (teamRatingsByGroup[group][team] !== undefined) {
+                    warnings.push(`L${index+1}: Duplicate team ${team} in group ${group}. Last Elo value used.`);
+                }
+                teamRatingsByGroup[group][team] = elo;
+            });
+
+            Object.entries(teamRatingsByGroup).forEach(([group, teamMap]) => {
+                const teams = Object.keys(teamMap);
+                if (teams.length !== 4) warnings.push(`Gr ${group}: ${teams.length} teams (exp 4).`);
+                groupTeamNames[group] = [...teams];
+                groupedMatches[group] = [];
+                teams.forEach(t => allTeams.add(t));
+
+                for (let i = 0; i < teams.length; i++) {
+                    for (let j = i + 1; j < teams.length; j++) {
+                        const team1 = teams[i];
+                        const team2 = teams[j];
+                        const match = deriveMatchFromElo(group, team1, team2, teamMap[team1], teamMap[team2], parsedMatches.length + 1);
+                        parsedMatches.push(match);
+                        groupedMatches[group].push(match);
+                    }
+                }
+                if (teams.length === 4 && groupedMatches[group].length !== 6) warnings.push(`Gr ${group}: ${groupedMatches[group].length} generated matches (exp 6).`);
+            });
+
+            return { errors, warnings };
+        }
+
+
+        // --- Parsing Logic (Simulator) ---
+        parseButtonEl.addEventListener('click', () => {
+            const mode = inputModeEl.value;
+            const { errors, warnings } = mode === 'elo' ? parseEloInputData() : parseOddsInputData();
             if (errors.length > 0) { statusAreaEl.innerHTML = `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = true; }
-            else { statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams.</p>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = false; resultsContentEl.innerHTML = "Parsed. Ready for sim."; }
+            else { statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${mode === 'elo' ? 'Elo-generated fixtures' : 'odds input'}).</p>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = false; resultsContentEl.innerHTML = "Parsed. Ready for sim."; }
         });
 
 
@@ -800,9 +918,11 @@
         // --- Clear Button ---
         clearButtonEl.addEventListener('click', () => {
             matchDataEl.value = ""; numSimulationsEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = "Results will appear here...";
+            eloDataEl.value = "";
             parsedMatches=[]; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
             runButtonEl.disabled=true; loaderEl.classList.add('hidden'); parseButtonEl.disabled=false;
             csvFileInputEl.value=null; csvFileNameEl.textContent="No file selected.";
+            eloCsvFileInputEl.value=null; eloCsvFileNameEl.textContent="No file selected.";
             populateSimGroupSelect(); 
             calculatedOddsResultContentEl.innerHTML = 'Select a group and click "Show/Refresh Market Odds" to see results.';
             simulatedOddsStatusEl.textContent = "";
@@ -834,9 +954,19 @@ B Croatia vs Albania 1.50 4.00 7.50 1.80 2.00
 B Spain vs Italy 2.20 3.20 3.60 1.65 2.20
 B Albania vs Spain 10.00 5.50 1.30 2.00 1.80
 B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
+        eloDataEl.value = `GROUP,TEAM,ELO
+A,Germany,1942
+A,Scotland,1730
+A,Hungary,1767
+A,Switzerland,1840
+B,Spain,2036
+B,Croatia,1854
+B,Italy,1898
+B,Albania,1610`;
 
         window.openTab = openTab; 
         populateTieBreakPresets();
+        updateInputModeUi();
         simCustomOperatorEl.addEventListener('change', () => { 
             if (simCustomOperatorEl.value === 'between') simCustomValue2El.classList.remove('hidden');
             else simCustomValue2El.classList.add('hidden');
