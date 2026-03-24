@@ -454,6 +454,60 @@
             return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals };
         }
 
+        function parseDelimitedLine(line, delimiter) {
+            const fields = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    if (inQuotes && line[i + 1] === '"') {
+                        current += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === delimiter && !inQuotes) {
+                    fields.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+
+            fields.push(current.trim());
+            return fields;
+        }
+
+        function getDelimitedParts(line) {
+            if (line.includes('\t')) return parseDelimitedLine(line, '\t');
+            if (line.includes(';')) return parseDelimitedLine(line, ';');
+            if (line.includes(',')) return parseDelimitedLine(line, ',');
+            return null;
+        }
+
+        function getCsvExportDateTime() {
+            const now = new Date();
+            const date = `${now.getUTCDate()}.${now.getUTCMonth() + 1}.${now.getUTCFullYear()}`;
+            const time = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
+            return { date, time };
+        }
+
+        function clearOverUnderDisplay() {
+            document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
+            document.getElementById('expectedTotalGroupGoals').textContent = '';
+            document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
+            document.getElementById('expectedFirstPlacePts').textContent = '';
+            document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
+            document.getElementById('expectedFourthPlacePts').textContent = '';
+            document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
+            document.getElementById('expectedFirstPlaceGF').textContent = '';
+            document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
+            document.getElementById('expectedFourthPlaceGF').textContent = '';
+        }
+
 
         // --- Parsing Logic (Simulator) ---
         parseButtonEl.addEventListener('click', () => {
@@ -462,11 +516,9 @@
             let errors = [], warnings = [];
             lines.forEach((line, index) => {
                 line = line.trim(); if (!line || line.startsWith('#')) return;
-                let parts, isCsvLike = false;
-                if (line.includes(',')) { parts = line.split(',').map(p => p.trim()); isCsvLike = true; }
-                else if (line.includes(';')) { parts = line.split(';').map(p => p.trim()); isCsvLike = true; }
-                else if (line.includes('\t')) { parts = line.split('\t').map(p => p.trim()); isCsvLike = true; }
-                else { parts = line.split(/\s+/).map(p => p.trim()); }
+                const delimitedParts = getDelimitedParts(line);
+                const isCsvLike = Array.isArray(delimitedParts);
+                let parts = isCsvLike ? delimitedParts : line.split(/\s+/).map(p => p.trim());
                 parts = parts.filter(p => p.length > 0);
                 let group, team1Name, team2Name, oddsStrings;
                 if (isCsvLike) {
@@ -706,16 +758,7 @@
                 simTeamSelectEl.disabled = true;
                 generateGroupCsvButtonEl.disabled = true;
             }
-            document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
-            document.getElementById('expectedTotalGroupGoals').textContent = '';
-            document.getElementById('ouFirstPlacePtsResult').innerHTML = '';
-            document.getElementById('expectedFirstPlacePts').textContent = '';
-            document.getElementById('ouFourthPlacePtsResult').innerHTML = '';
-            document.getElementById('expectedFourthPlacePts').textContent = '';
-            document.getElementById('ouFirstPlaceGFResult').innerHTML = '';
-            document.getElementById('expectedFirstPlaceGF').textContent = '';
-            document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
-            document.getElementById('expectedFourthPlaceGF').textContent = '';
+            clearOverUnderDisplay();
         });
 
         simTeamSelectEl.addEventListener('change', () => {
@@ -939,8 +982,7 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             }
 
             let csvContent = "Date,Time,Market,Odd1,Odd2,Odd3\n";
-            const date = "15.6.2025";
-            const time = "02:00";
+            const { date, time } = getCsvExportDateTime();
             
             const toCsvRow = (market, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}",${odd1},${odd2},${odd3}\n`;
 
@@ -1020,8 +1062,7 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             }
 
             let csvContent = `LEAGUE_NAME: Grupa ${groupKey}\n`;
-            const date = "15.6.2025";
-            const time = "02:00";
+            const { date, time } = getCsvExportDateTime();
             const toCsvRow = (market, submarket, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}","${submarket}",${odd1},${odd2},${odd3}\n`;
             
             // Group Specials
