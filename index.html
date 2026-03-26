@@ -34,6 +34,9 @@
                     <p>Accepted delimiters: comma, semicolon, or tab.</p>
                     <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
                     <p>Hybrid mode uses your provided odds matches, then fills missing group fixtures from Elo.</p>
+                    <p class="font-semibold mt-2 mb-1">Hybrid input structure (proposed)</p>
+                    <p><strong>1) Match Data (Odds Input):</strong> include only known matches (e.g., Round 1), using the existing odds row format.</p>
+                    <p><strong>2) Elo Data:</strong> include all teams per group using <code>GROUP,TEAM,ELO</code>, so missing pairings can be generated.</p>
                     <p class="mt-1">Example rows:</p>
                     <pre class="mt-1 whitespace-pre-wrap">GROUP,TEAM,ELO
 A,Germany,1942
@@ -49,7 +52,8 @@ B,Spain,2036</pre>
                     CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>
                     Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
                     Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5 (TEAM_A/B are single fields)<br/>
-                    If team names contain the delimiter, quote them in the CSV (e.g., "Team, Inc.").
+                    If team names contain the delimiter, quote them in the CSV (e.g., "Team, Inc.").<br/>
+                    In <strong>Hybrid</strong> mode, paste only matches with known odds here.
                 </p>
             </div>
             <div class="mb-6">
@@ -65,7 +69,8 @@ B,Spain,2036</pre>
                     Example:<br/>
                     A,Germany,1942<br/>
                     A,Scotland,1730<br/>
-                    Delimiters supported: comma, semicolon, tab.
+                    Delimiters supported: comma, semicolon, tab.<br/>
+                    In <strong>Hybrid</strong> mode, include all teams for each group here.
                 </p>
                 <label for="eloData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Elo Data:</label>
                 <textarea id="eloData" rows="8" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
