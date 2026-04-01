@@ -41,6 +41,8 @@
         const generateGroupCsvButtonEl = document.getElementById('generateGroupCsvButton');
         const tieBreakPresetEl = document.getElementById('tieBreakPreset');
         const tieBreakPresetHelpEl = document.getElementById('tieBreakPresetHelp');
+        const advancementPresetEl = document.getElementById('advancementPreset');
+        const advancementPresetHelpEl = document.getElementById('advancementPresetHelp');
 
         const tieBreakRulePresets = {
             uefa_competition: {
@@ -70,6 +72,27 @@
             }
         };
 
+        const advancementRulePresets = {
+            top2_only: {
+                label: "Top 2 only",
+                description: "Top 2 teams per group qualify. No best-third ranking is used.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 0
+            },
+            top2_plus_best4_thirds: {
+                label: "Top 2 + best 4 third-placed",
+                description: "Top 2 qualify directly, plus 4 best 3rd-placed teams across groups.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 4
+            },
+            top2_plus_best8_thirds: {
+                label: "Top 2 + best 8 third-placed",
+                description: "Top 2 qualify directly, plus 8 best 3rd-placed teams across groups.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 8
+            }
+        };
+
         function populateTieBreakPresets() {
             tieBreakPresetEl.innerHTML = '';
             Object.entries(tieBreakRulePresets).forEach(([key, preset]) => {
@@ -87,6 +110,28 @@
             tieBreakPresetHelpEl.textContent = preset ? preset.description : '';
         }
         tieBreakPresetEl.addEventListener('change', updateTieBreakPresetDescription);
+
+        function populateAdvancementPresets() {
+            advancementPresetEl.innerHTML = '';
+            Object.entries(advancementRulePresets).forEach(([key, preset]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = preset.label;
+                advancementPresetEl.appendChild(option);
+            });
+            advancementPresetEl.value = 'top2_plus_best8_thirds';
+            updateAdvancementPresetDescription();
+        }
+
+        function updateAdvancementPresetDescription() {
+            const preset = advancementRulePresets[advancementPresetEl.value];
+            advancementPresetHelpEl.textContent = preset ? preset.description : '';
+        }
+        advancementPresetEl.addEventListener('change', updateAdvancementPresetDescription);
+
+        function getSelectedAdvancementPreset() {
+            return advancementRulePresets[advancementPresetEl.value] || advancementRulePresets.top2_plus_best8_thirds;
+        }
 
 
         // --- CSV File Input ---
@@ -840,7 +885,7 @@
             const sortedBracketMatches = [...parsedBracketMatches].sort((a, b) => a.matchNum - b.matchNum);
             const knockoutWinners = {};
             const knockoutLosers = {};
-            const thirdQualifiedByGroup = new Set(thirdRankedList.slice(0, 8).map(t => t.group));
+            const thirdQualifiedByGroup = new Set(thirdRankedList.map(t => t.group));
             const usedTeamsInRound = {};
 
             sortedBracketMatches.forEach(match => {
@@ -866,6 +911,9 @@
 
         function runSimulation(numSims) {
             const aggStats={}; 
+            const advancementPreset = getSelectedAdvancementPreset();
+            const autoQualifiersPerGroup = Math.max(0, advancementPreset.autoQualifiersPerGroup || 0);
+            const bestThirdSlots = Math.max(0, advancementPreset.bestThirdSlots || 0);
             for(const gr in groupedMatches){ 
                 aggStats[gr]={
                     groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, 
@@ -945,8 +993,8 @@
                             tA.gaSims.push(t.ga); 
                             if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
-                            if (rI < 2) tA.autoQualifyCount++;
-                            if (rI < 2) tA.advanceToKnockoutCount++;
+                            if (rI < autoQualifiersPerGroup) tA.autoQualifyCount++;
+                            if (rI < autoQualifiersPerGroup) tA.advanceToKnockoutCount++;
                         }
                     });
 
@@ -973,14 +1021,14 @@
                             if (a.group !== b.group) return a.group.localeCompare(b.group);
                             return a.name.localeCompare(b.name);
                         })
-                    sortedThirds.slice(0, 8).forEach(team => {
+                    sortedThirds.slice(0, bestThirdSlots).forEach(team => {
                         const tA = aggStats[team.group]?.[team.name];
                         if (!tA) return;
                         tA.bestThirdQualifyCount++;
                         tA.advanceToKnockoutCount++;
                     });
                     if (Object.keys(teamEloRatings).length > 0 && parsedBracketMatches.length > 0) {
-                        runKnockoutStage(aggStats, groupStandings, sortedThirds);
+                        runKnockoutStage(aggStats, groupStandings, sortedThirds.slice(0, bestThirdSlots));
                     }
                 }
             }
@@ -1152,6 +1200,7 @@
         showSimulatedOddsButtonEl.addEventListener('click', () => { 
             const selectedGroupKey = simGroupSelectEl.value;
             const mainMarginPercent = parseFloat(simBookieMarginEl.value);
+            const advancementPreset = getSelectedAdvancementPreset();
             
             simulatedOddsStatusEl.textContent = ""; 
             calculatedOddsResultContentEl.innerHTML = "";
@@ -1180,7 +1229,7 @@
             });
             html+=`</tbody></table>`;
             
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2 + Best 8 Third-Placed):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (${advancementPreset.label}):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.advanceToKnockoutCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
 
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
@@ -1346,6 +1395,7 @@ B,Albania,1610`;
 
         window.openTab = openTab; 
         populateTieBreakPresets();
+        populateAdvancementPresets();
         updateInputModeUi();
         simCustomOperatorEl.addEventListener('change', () => { 
             if (simCustomOperatorEl.value === 'between') simCustomValue2El.classList.remove('hidden');
@@ -1357,6 +1407,7 @@ B,Albania,1610`;
             const teamName = simTeamSelectEl.value;
             const marginPercent = parseFloat(simBookieMarginEl.value);
             const marginDecimal = marginPercent / 100;
+            const advancementPreset = getSelectedAdvancementPreset();
             
             if (!groupKey || !teamName) {
                 alert("Please select a group and a team first.");
@@ -1384,7 +1435,7 @@ B,Albania,1610`;
 
             const probQualify = (teamData.advanceToKnockoutCount || 0) / currentNumSims;
             const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
-            csvContent += toCsvRow("Prolazi dalje (Top 2 + najboljih 8 treceplasiranih)", oddQualify);
+            csvContent += toCsvRow(`Prolazi dalje (${advancementPreset.label})`, oddQualify);
 
             const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
             const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
@@ -1395,7 +1446,7 @@ B,Albania,1610`;
             csvContent += toCsvRow("3. mesto u grupi", odd3rd);
 
             const probDirectQualify = (teamData.autoQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow("Direktan prolaz (Top 2)", calculateOddWithMargin(probDirectQualify, marginDecimal));
+            csvContent += toCsvRow(`Direktan prolaz (Top ${advancementPreset.autoQualifiersPerGroup})`, calculateOddWithMargin(probDirectQualify, marginDecimal));
 
             const probBestThirdQualify = (teamData.bestThirdQualifyCount || 0) / currentNumSims;
             csvContent += toCsvRow("Prolaz kao najbolja 3.", calculateOddWithMargin(probBestThirdQualify, marginDecimal));
