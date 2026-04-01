@@ -315,6 +315,21 @@
             return null;
         }
 
+        function normalizePastedLineBreaks(raw) {
+            return raw.replace(/\\r\\n|\\n|\\r/g, '\n');
+        }
+
+        function isLikelyOddsHeader(parts) {
+            const normalized = parts.map(p => String(p).trim().toUpperCase());
+            return normalized.length >= 8
+                && normalized[0] === 'GROUP'
+                && normalized.includes('TEAM_A')
+                && normalized.includes('TEAM_B')
+                && normalized.includes('ODD1')
+                && normalized.includes('ODDX')
+                && normalized.includes('ODD2');
+        }
+
         function getCsvExportDateTime() {
             const now = new Date();
             const date = `${now.getUTCDate()}.${now.getUTCMonth() + 1}.${now.getUTCFullYear()}`;
@@ -374,9 +389,9 @@
         }
 
         function parseOddsInputData() {
-            const data = matchDataEl.value.trim();
+            const data = normalizePastedLineBreaks(matchDataEl.value.trim());
             if (!data) return { errors: ['Error: Match data empty.'] };
-            const lines = data.split('\n');
+            const lines = data.split(/\r?\n/);
             parsedMatches = [];
             allTeams.clear();
             groupedMatches = {};
@@ -389,6 +404,7 @@
                 const isCsvLike = Array.isArray(delimitedParts);
                 let parts = isCsvLike ? delimitedParts : line.split(/\s+/).map(p => p.trim());
                 parts = parts.filter(p => p.length > 0);
+                if (index === 0 && isCsvLike && isLikelyOddsHeader(parts)) return;
                 let group, team1Name, team2Name, oddsStrings;
                 if (isCsvLike) {
                     const vsIdx = parts.indexOf('vs');
@@ -634,11 +650,13 @@
                 (groupTeamNames[gr]||[]).forEach(tN=>{
                     aggStats[gr][tN]={
                         posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [],
-                        mostGFCount:0, mostGACount:0
+                        mostGFCount:0, mostGACount:0,
+                        autoQualifyCount: 0, bestThirdQualifyCount: 0, advanceToKnockoutCount: 0
                     };
                 });
             }
             for(let i=0; i<numSims; i++){ 
+                const thirdPlacedTeams = [];
                 for(const gK in groupedMatches){ 
                     const cGMs=groupedMatches[gK];
                     const tIG=[...(groupTeamNames[gK]||[])]; 
@@ -698,8 +716,14 @@
                             tA.gaSims.push(t.ga); 
                             if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
+                            if (rI < 2) tA.autoQualifyCount++;
+                            if (rI < 2) tA.advanceToKnockoutCount++;
                         }
                     });
+
+                    if (rTs.length >= 3) {
+                        thirdPlacedTeams.push({ group: gK, ...rTs[2] });
+                    }
             
                     if(rTs.length>=2&&aggStats[gK]){
                         const sFK=`${rTs[0].name}(1st)-${rTs[1].name}(2nd)`;
@@ -708,6 +732,25 @@
                         const aDK=`${aDP[0]}&${aDP[1]}`;
                         aggStats[gK].advancingDoubles[aDK]=(aggStats[gK].advancingDoubles[aDK]||0)+1;
                     }
+                }
+
+                if (thirdPlacedTeams.length > 0) {
+                    thirdPlacedTeams
+                        .sort((a, b) => {
+                            if (a.pts !== b.pts) return b.pts - a.pts;
+                            if (a.gd !== b.gd) return b.gd - a.gd;
+                            if (a.gf !== b.gf) return b.gf - a.gf;
+                            if ((a.wins || 0) !== (b.wins || 0)) return (b.wins || 0) - (a.wins || 0);
+                            if (a.group !== b.group) return a.group.localeCompare(b.group);
+                            return a.name.localeCompare(b.name);
+                        })
+                        .slice(0, 8)
+                        .forEach(team => {
+                            const tA = aggStats[team.group]?.[team.name];
+                            if (!tA) return;
+                            tA.bestThirdQualifyCount++;
+                            tA.advanceToKnockoutCount++;
+                        });
                 }
             }
             return aggStats;
@@ -894,8 +937,8 @@
             });
             html+=`</tbody></table>`;
             
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
-            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&tS.posCounts&&currentNumSims>0)?((tS.posCounts[0]||0)+(tS.posCounts[1]||0))/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2 + Best 8 Third-Placed):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
+            teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.advanceToKnockoutCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
 
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.mostGFCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
@@ -1094,9 +1137,9 @@ B,Albania,1610`;
             const odd1st = calculateOddWithMargin(prob1st, marginDecimal);
             csvContent += toCsvRow("Pobednik grupe", odd1st);
 
-            const probQualify = ((teamData.posCounts[0] || 0) + (teamData.posCounts[1] || 0)) / currentNumSims;
+            const probQualify = (teamData.advanceToKnockoutCount || 0) / currentNumSims;
             const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
-            csvContent += toCsvRow("Prolazi grupu", oddQualify);
+            csvContent += toCsvRow("Prolazi dalje (Top 2 + najboljih 8 treceplasiranih)", oddQualify);
 
             const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
             const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
@@ -1105,6 +1148,12 @@ B,Albania,1610`;
             const prob3rd = (teamData.posCounts[2] || 0) / currentNumSims;
             const odd3rd = calculateOddWithMargin(prob3rd, marginDecimal);
             csvContent += toCsvRow("3. mesto u grupi", odd3rd);
+
+            const probDirectQualify = (teamData.autoQualifyCount || 0) / currentNumSims;
+            csvContent += toCsvRow("Direktan prolaz (Top 2)", calculateOddWithMargin(probDirectQualify, marginDecimal));
+
+            const probBestThirdQualify = (teamData.bestThirdQualifyCount || 0) / currentNumSims;
+            csvContent += toCsvRow("Prolaz kao najbolja 3.", calculateOddWithMargin(probBestThirdQualify, marginDecimal));
 
             const prob4th = (teamData.posCounts[3] || 0) / currentNumSims;
             const odd4th = calculateOddWithMargin(prob4th, marginDecimal);
