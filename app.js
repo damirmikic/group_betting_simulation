@@ -18,6 +18,61 @@
 
         // --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
+        let lockedScenarios = {}; // key: "team1||team2", value: 'home'|'draw'|'away'
+        let currentLanguage = 'en';
+
+        // --- Localization ---
+        const translations = {
+            en: {
+                groupWinner: 'Group Winner',
+                advanceFurther: 'Advance',
+                place2: '2nd place in group',
+                place3: '3rd place in group',
+                place4: '4th place in group',
+                directQual: 'Direct qualification (Top {n})',
+                bestThirdQual: 'Qualify as best 3rd',
+                ptsExact: '{n} points in group',
+                pts1_3: '1-3 points in group',
+                pts2_4: '2-4 points in group',
+                pts4_6: '4-6 points in group',
+                ptsOU: 'Points in group',
+                anyTeam: 'Any team',
+                pts9: '9 points',
+                pts0: '0 points',
+                firstPlaced: 'First-placed team',
+                lastPlaced: 'Last-placed team',
+                exactOrder12: 'Exact order 1st-2nd',
+                topTwoAny: 'Top two in group',
+                leagueName: 'Group {g}',
+            },
+            sr: {
+                groupWinner: 'Pobednik grupe',
+                advanceFurther: 'Prolazi dalje',
+                place2: '2. mesto u grupi',
+                place3: '3. mesto u grupi',
+                place4: '4. mesto u grupi',
+                directQual: 'Direktan prolaz (Top {n})',
+                bestThirdQual: 'Prolaz kao najbolja 3.',
+                ptsExact: '{n} bodova u grupi',
+                pts1_3: '1-3 boda u grupi',
+                pts2_4: '2-4 boda u grupi',
+                pts4_6: '4-6 bodova u grupi',
+                ptsOU: 'Osvojenih bodova u grupi',
+                anyTeam: 'Bilo koji tim',
+                pts9: '9 bodova',
+                pts0: '0 bodova',
+                firstPlaced: 'Prvoplasirani tim',
+                lastPlaced: 'Poslednjeplasirani tim',
+                exactOrder12: 'Tacan poredak 1-2',
+                topTwoAny: 'Prva dva u grupi',
+                leagueName: 'Grupa {g}',
+            }
+        };
+
+        function t(key, vars = {}) {
+            const str = (translations[currentLanguage] || translations.en)[key] || key;
+            return str.replace(/\{(\w+)\}/g, (_, k) => vars[k] !== undefined ? vars[k] : `{${k}}`);
+        }
 
         // --- DOM Elements ---
         const matchDataEl = document.getElementById('matchData'), numSimulationsEl = document.getElementById('numSimulations');
@@ -48,6 +103,17 @@
         const showTournamentTeamOddsButtonEl = document.getElementById('showTournamentTeamOddsButton');
         const tournamentTeamOddsStatusEl = document.getElementById('tournamentTeamOddsStatus');
         const tournamentTeamOddsResultContentEl = document.getElementById('tournamentTeamOddsResultContent');
+        const scenarioLockSectionEl = document.getElementById('scenarioLockSection');
+        const scenarioLockTableBodyEl = document.getElementById('scenarioLockTableBody');
+        const clearLocksBtnEl = document.getElementById('clearLocksBtn');
+        const exportRawDataSectionEl = document.getElementById('exportRawDataSection');
+        const exportRawDataBtnEl = document.getElementById('exportRawDataBtn');
+        const customOULinesEl = document.getElementById('customOULines');
+        const showMultiGroupViewBtnEl = document.getElementById('showMultiGroupViewBtn');
+        const multiGroupViewStatusEl = document.getElementById('multiGroupViewStatus');
+        const multiGroupViewContentEl = document.getElementById('multiGroupViewContent');
+        const multiGroupMarginEl = document.getElementById('multiGroupMargin');
+        const langToggleBtnEl = document.getElementById('langToggleBtn');
 
         const tieBreakRulePresets = {
             uefa_competition: {
@@ -398,6 +464,57 @@
             const date = `${now.getUTCDate()}.${now.getUTCMonth() + 1}.${now.getUTCFullYear()}`;
             const time = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
             return { date, time };
+        }
+
+        // --- Scenario Locking ---
+        function buildScenarioLockUI() {
+            if (!parsedMatches || parsedMatches.length === 0) {
+                scenarioLockSectionEl.classList.add('hidden');
+                return;
+            }
+            scenarioLockSectionEl.classList.remove('hidden');
+            scenarioLockTableBodyEl.innerHTML = '';
+            parsedMatches.forEach((m, idx) => {
+                const key = buildMatchPairKey(m.team1, m.team2);
+                const currentLock = lockedScenarios[key] || 'simulate';
+                const tr = document.createElement('tr');
+                tr.className = idx % 2 === 0 ? 'bg-white' : 'bg-amber-50';
+                tr.innerHTML = `
+                    <td class="px-3 py-1.5 text-gray-600">Gr. ${m.group}</td>
+                    <td class="px-3 py-1.5 font-medium">${m.team1} vs ${m.team2}</td>
+                    <td class="px-3 py-1.5">
+                        <select data-match-key="${key}" class="scenario-lock-select border border-amber-300 rounded px-1 py-0.5 text-xs bg-white">
+                            <option value="simulate" ${currentLock === 'simulate' ? 'selected' : ''}>🎲 Simulate</option>
+                            <option value="home" ${currentLock === 'home' ? 'selected' : ''}>${m.team1} wins</option>
+                            <option value="draw" ${currentLock === 'draw' ? 'selected' : ''}>Draw</option>
+                            <option value="away" ${currentLock === 'away' ? 'selected' : ''}>${m.team2} wins</option>
+                        </select>
+                    </td>`;
+                scenarioLockTableBodyEl.appendChild(tr);
+            });
+            // Sync selects to lockedScenarios on change
+            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-select').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    const key = sel.dataset.matchKey;
+                    if (sel.value === 'simulate') delete lockedScenarios[key];
+                    else lockedScenarios[key] = sel.value;
+                });
+            });
+        }
+
+        function simulateLockedMatch(m, outcome) {
+            // Rejection sampling: generate until we get the locked outcome (max 300 tries)
+            for (let tries = 0; tries < 300; tries++) {
+                const g1 = poissonRandom(m.lambda1);
+                const g2 = poissonRandom(m.lambda2);
+                if (outcome === 'home' && g1 > g2) return { g1, g2 };
+                if (outcome === 'draw' && g1 === g2) return { g1, g2 };
+                if (outcome === 'away' && g2 > g1) return { g1, g2 };
+            }
+            // Fallback for very improbable outcomes
+            if (outcome === 'home') return { g1: 1, g2: 0 };
+            if (outcome === 'draw') return { g1: 1, g2: 1 };
+            return { g1: 0, g2: 1 };
         }
 
         function clearOverUnderDisplay() {
@@ -820,6 +937,7 @@
                 if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`;
                 runButtonEl.disabled = false;
                 resultsContentEl.innerHTML = "Parsed. Ready for sim.";
+                buildScenarioLockUI();
             }
         });
 
@@ -840,8 +958,10 @@
                         console.error("DisplayResults Error:", displayError);
                         statusAreaEl.innerHTML += `<p class="text-red-500">Error displaying results: ${displayError.message}</p>`;
                     }
-                    populateSimGroupSelect(); 
+                    populateSimGroupSelect();
                     populateTournamentTeamSelect();
+                    exportRawDataSectionEl.classList.remove('hidden');
+                    multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
                     statusAreaEl.innerHTML = `<p class="text-green-500">Sim complete! (${currentNumSims} runs)</p>`;
                 } catch (simError) { 
                     console.error("Sim Error:", simError);
@@ -963,6 +1083,7 @@
                 (groupTeamNames[gr]||[]).forEach(tN=>{
                     aggStats[gr][tN]={
                         posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [],
+                        positionSims: [],
                         mostGFCount:0, mostGACount:0,
                         autoQualifyCount: 0, bestThirdQualifyCount: 0, advanceToKnockoutCount: 0
                     };
@@ -987,8 +1108,16 @@
                     const simulatedGroupMatches = [];
             
                     cGMs.forEach(m=>{
-                        const g1=poissonRandom(m.lambda1); 
-                        const g2=poissonRandom(m.lambda2); 
+                        const lockKey = buildMatchPairKey(m.team1, m.team2);
+                        const lockOutcome = lockedScenarios[lockKey];
+                        let g1, g2;
+                        if (lockOutcome) {
+                            const locked = simulateLockedMatch(m, lockOutcome);
+                            g1 = locked.g1; g2 = locked.g2;
+                        } else {
+                            g1 = poissonRandom(m.lambda1);
+                            g2 = poissonRandom(m.lambda2);
+                        }
                         simulatedGroupMatches.push({ team1: m.team1, team2: m.team2, g1, g2 });
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
@@ -1037,14 +1166,15 @@
                     }
             
                     rTs.forEach((t,rI)=>{
-                        const tA=aggStats[gK]?.[t.name]; 
+                        const tA=aggStats[gK]?.[t.name];
                         if(tA){
-                            if(rI<4)tA.posCounts[rI]++; 
+                            if(rI<4)tA.posCounts[rI]++;
                             tA.ptsSims.push(t.pts);
                             tA.winsSims.push(t.wins || 0);
                             tA.gfSims.push(t.gf);
-                            tA.gaSims.push(t.ga); 
-                            if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
+                            tA.gaSims.push(t.ga);
+                            tA.positionSims.push(rI + 1);
+                            if(t.gf===mGF&&mGF>0)tA.mostGFCount++;
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
                             if (rI < autoQualifiersPerGroup) tA.autoQualifyCount++;
                             if (rI < autoQualifiersPerGroup) tA.advanceToKnockoutCount++;
@@ -1185,6 +1315,11 @@
                 html += `</tbody></table>`;
                 const avgGroupGoals = (groupData.groupTotalGoalsSims&&groupData.groupTotalGoalsSims.length>0&&numSims>0)?groupData.groupTotalGoalsSims.reduce((a,b)=>a+b,0)/numSims:0;
                 html += `<p class="mt-2 text-sm"><strong>Expected Total Goals in Group ${groupKey}:</strong> ${avgGroupGoals.toFixed(2)}</p>`;
+
+                // Chart canvas for points distribution
+                html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Points Distribution (all simulations):</h4>`;
+                html += `<div class="chart-container mb-4" style="position:relative;height:180px;"><canvas id="chartPts_${groupKey}"></canvas></div>`;
+
                 const allSF=Object.entries(groupData.straightForecasts||{}).sort(([,a],[,b])=>b-a); html+=`<h4 class="font-medium text-gray-700 mt-4 mb-1">All Straight Forecasts (1st-2nd):</h4><ul class="list-disc list-inside text-sm max-h-40 overflow-y-auto">${allSF.map(([k,c])=>`<li>${k}: ${(numSims>0?c/numSims*100:0).toFixed(1)}%</li>`).join('')||'N/A'}</ul>`;
                 const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-4 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4><ul class="list-disc list-inside text-sm">${topAD.map(([k,c])=>`<li>${k}: ${(numSims>0?c/numSims*100:0).toFixed(1)}%</li>`).join('')||'N/A'}</ul>`;
                 html += `</div>`;
@@ -1201,8 +1336,182 @@
                 html += `</tbody></table></div>`;
             }
             resultsContentEl.innerHTML = html || "<p>No results. Parse & run sim.</p>";
+            // Render charts after DOM is set
+            renderGroupCharts(aggStats, numSims);
+        }
+
+        // --- Probability Distribution Charts ---
+        const _chartInstances = {};
+
+        function renderGroupCharts(aggStats, numSims) {
+            if (typeof Chart === 'undefined') return;
+            const POINT_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 9];
+            const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'];
+
+            const sortedGroupKeys = Object.keys(aggStats).filter(k => k !== '_knockout').sort();
+            sortedGroupKeys.forEach(groupKey => {
+                const groupData = aggStats[groupKey];
+                const teams = groupTeamNames[groupKey] || [];
+                const canvasId = `chartPts_${groupKey}`;
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+
+                // Destroy prior chart instance if any
+                if (_chartInstances[canvasId]) { _chartInstances[canvasId].destroy(); }
+
+                const datasets = teams.map((teamName, idx) => {
+                    const ptsSims = groupData[teamName]?.ptsSims || [];
+                    const data = POINT_VALUES.map(pts =>
+                        numSims > 0 ? (ptsSims.filter(p => p === pts).length / numSims * 100) : 0
+                    );
+                    return {
+                        label: teamName,
+                        data,
+                        backgroundColor: COLORS[idx % COLORS.length] + 'cc',
+                        borderColor: COLORS[idx % COLORS.length],
+                        borderWidth: 1,
+                    };
+                });
+
+                _chartInstances[canvasId] = new Chart(canvas, {
+                    type: 'bar',
+                    data: { labels: POINT_VALUES.map(String), datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+                            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+                            title: { display: false }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'Points', font: { size: 11 } } },
+                            y: { title: { display: true, text: '%', font: { size: 11 } }, beginAtZero: true }
+                        }
+                    }
+                });
+            });
         }
         
+        // --- Multi-Group Tournament View ---
+        function displayMultiGroupView() {
+            const marginPercent = parseFloat(multiGroupMarginEl.value);
+            multiGroupViewStatusEl.textContent = '';
+
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                multiGroupViewStatusEl.textContent = 'Please enter a valid margin (0–100).';
+                return;
+            }
+            if (currentNumSims === 0 || Object.keys(simulationAggStats).length === 0) {
+                multiGroupViewStatusEl.textContent = 'Run simulation first.';
+                return;
+            }
+
+            const marginDec = marginPercent / 100;
+            const advPreset = getSelectedAdvancementPreset();
+            const groupKeys = Object.keys(simulationAggStats).filter(k => k !== '_knockout').sort();
+            const hasKnockout = Object.keys(simulationAggStats._knockout?.teamProgress || {}).length > 0 && parsedBracketMatches.length > 0;
+
+            let html = `<h3 class="text-lg font-semibold text-indigo-600 mb-3">All Groups — Advancement Probabilities (Margin: ${marginPercent}%)</h3>`;
+
+            // Build combined table header
+            let headerCols = '<th class="px-2 py-2 text-left">Group</th><th class="px-2 py-2 text-left">Team</th><th class="px-2 py-2">P(1st)</th><th class="px-2 py-2">P(2nd)</th><th class="px-2 py-2">P(3rd)</th><th class="px-2 py-2">P(4th)</th><th class="px-2 py-2">P(Qualify)</th><th class="px-2 py-2">E(Pts)</th>';
+            if (hasKnockout) headerCols += '<th class="px-2 py-2">P(Champion)</th>';
+
+            html += `<table class="min-w-full divide-y divide-gray-200 mb-6 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${headerCols}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+
+            groupKeys.forEach(gK => {
+                const groupData = simulationAggStats[gK];
+                const teams = groupTeamNames[gK] || [];
+                // Sort teams by P(qualify) descending
+                const sortedTeams = [...teams].sort((a, b) => {
+                    const qa = (groupData[a]?.advanceToKnockoutCount || 0);
+                    const qb = (groupData[b]?.advanceToKnockoutCount || 0);
+                    return qb - qa;
+                });
+                sortedTeams.forEach((teamName, idx) => {
+                    const ts = groupData[teamName];
+                    if (!ts) return;
+                    const pPos = i => currentNumSims > 0 ? (ts.posCounts[i] || 0) / currentNumSims : 0;
+                    const pQual = currentNumSims > 0 ? (ts.advanceToKnockoutCount || 0) / currentNumSims : 0;
+                    const avgPts = ts.ptsSims.length > 0 ? ts.ptsSims.reduce((a, b) => a + b, 0) / currentNumSims : 0;
+                    const bgClass = idx % 2 === 0 ? '' : 'bg-gray-50';
+
+                    let row = `<tr class="${bgClass}">`;
+                    if (idx === 0) row = `<tr class="${bgClass} border-t-2 border-indigo-200">`;
+                    row += `<td class="px-2 py-1.5 font-semibold text-indigo-600">${idx === 0 ? `Gr. ${gK}` : ''}</td>`;
+                    row += `<td class="px-2 py-1.5 font-medium">${teamName}</td>`;
+                    for (let i = 0; i < 4; i++) {
+                        row += `<td class="px-2 py-1.5 text-center">${(pPos(i) * 100).toFixed(1)}%</td>`;
+                    }
+                    row += `<td class="px-2 py-1.5 text-center font-semibold ${pQual > 0.5 ? 'text-green-700' : ''}">${(pQual * 100).toFixed(1)}%</td>`;
+                    row += `<td class="px-2 py-1.5 text-center">${avgPts.toFixed(2)}</td>`;
+                    if (hasKnockout) {
+                        const kpStats = simulationAggStats._knockout?.teamProgress?.[teamName];
+                        const pChamp = kpStats ? (kpStats.winFINAL || 0) / currentNumSims : 0;
+                        row += `<td class="px-2 py-1.5 text-center font-semibold">${calculateOddWithMargin(pChamp, marginDec)}</td>`;
+                    }
+                    row += '</tr>';
+                    html += row;
+                });
+            });
+
+            html += '</tbody></table>';
+
+            // Group-level summary
+            html += `<h3 class="text-lg font-semibold text-indigo-600 mb-2 mt-2">Per-Group Summary</h3>`;
+            html += `<table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm"><thead class="bg-gray-50"><tr><th class="px-2 py-2 text-left">Group</th><th class="px-2 py-2">Avg Goals</th><th class="px-2 py-2">P(Any 9 Pts)</th><th class="px-2 py-2">P(Any 0 Pts)</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+            groupKeys.forEach(gK => {
+                const gd = simulationAggStats[gK];
+                const avgGoals = gd.groupTotalGoalsSims && gd.groupTotalGoalsSims.length > 0 ? gd.groupTotalGoalsSims.reduce((a, b) => a + b, 0) / currentNumSims : 0;
+                const p9 = currentNumSims > 0 ? (gd.anyTeam9PtsCount || 0) / currentNumSims : 0;
+                const p0 = currentNumSims > 0 ? (gd.anyTeam0PtsCount || 0) / currentNumSims : 0;
+                html += `<tr><td class="px-2 py-1.5 font-semibold">Gr. ${gK}</td><td class="px-2 py-1.5 text-center">${avgGoals.toFixed(2)}</td><td class="px-2 py-1.5 text-center">${(p9*100).toFixed(1)}%</td><td class="px-2 py-1.5 text-center">${(p0*100).toFixed(1)}%</td></tr>`;
+            });
+            html += '</tbody></table>';
+
+            multiGroupViewContentEl.innerHTML = html;
+        }
+
+        // --- Raw Simulation Data Export ---
+        function exportRawSimData() {
+            if (currentNumSims === 0 || Object.keys(simulationAggStats).length === 0) {
+                alert('Run simulation first.');
+                return;
+            }
+
+            const groupKeys = Object.keys(simulationAggStats).filter(k => k !== '_knockout').sort();
+            const header = 'sim,group,team,pts,gf,ga,wins,position\n';
+            const rows = [];
+
+            for (let simIdx = 0; simIdx < currentNumSims; simIdx++) {
+                groupKeys.forEach(gK => {
+                    const teams = groupTeamNames[gK] || [];
+                    teams.forEach(teamName => {
+                        const ts = simulationAggStats[gK]?.[teamName];
+                        if (!ts) return;
+                        const pts = ts.ptsSims[simIdx] ?? '';
+                        const gf = ts.gfSims[simIdx] ?? '';
+                        const ga = ts.gaSims[simIdx] ?? '';
+                        const wins = ts.winsSims[simIdx] ?? '';
+                        const pos = ts.positionSims[simIdx] ?? '';
+                        rows.push(`${simIdx + 1},${gK},"${teamName}",${pts},${gf},${ga},${wins},${pos}`);
+                    });
+                });
+            }
+
+            const csvContent = header + rows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `raw_sim_data_${currentNumSims}sims.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         // --- Simulated Group Odds Tab Logic ---
         function calculateOddWithMargin(trueProb, marginDec) { if (trueProb <= 0) return "N/A"; const factor = 1 + marginDec; return (1 / (trueProb * factor)).toFixed(2); }
         
@@ -1242,14 +1551,21 @@
 
         function renderOverUnderRows(values, lines, marginDecimal) {
             if (!values || values.length === 0 || currentNumSims === 0) return '<p class="text-xs text-gray-500">No data.</p>';
-            let html = `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Line</th><th>Over</th><th>Under</th></tr></thead><tbody>`;
+            let html = `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Line</th><th>Over</th><th>Under</th><th>Over %</th><th>Under %</th></tr></thead><tbody>`;
             lines.forEach(line => {
                 const overProb = values.filter(v => v > line).length / currentNumSims;
                 const underProb = values.filter(v => v < line).length / currentNumSims;
-                html += `<tr><td>${line.toFixed(1)}</td><td>${calculateOddWithMargin(overProb, marginDecimal)}</td><td>${calculateOddWithMargin(underProb, marginDecimal)}</td></tr>`;
+                html += `<tr><td>${line.toFixed(1)}</td><td>${calculateOddWithMargin(overProb, marginDecimal)}</td><td>${calculateOddWithMargin(underProb, marginDecimal)}</td><td class="text-gray-400">${(overProb*100).toFixed(1)}%</td><td class="text-gray-400">${(underProb*100).toFixed(1)}%</td></tr>`;
             });
             html += '</tbody></table>';
             return html;
+        }
+
+        function getCustomOULines() {
+            const raw = customOULinesEl ? customOULinesEl.value.trim() : '';
+            if (!raw) return null;
+            const parsed = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            return parsed.length > 0 ? parsed : null;
         }
 
         simGroupSelectEl.addEventListener('change', () => {
@@ -1373,9 +1689,17 @@
                     const avg = groupData[dataKey].reduce((a, b) => a + b, 0) / currentNumSims;
                     expectedElement.textContent = `(Avg: ${avg.toFixed(2)})`;
 
-                    const centerLine = Math.round(avg) + 0.5;
-                    const lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l > 0); 
-                    let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th class="w-1/3">Line</th><th class="w-1/3">Over</th><th class="w-1/3">Under</th></tr></thead><tbody>`;
+                    // Use custom lines if specified, otherwise auto-compute
+                    const customLines = getCustomOULines();
+                    let lines;
+                    if (customLines) {
+                        lines = customLines;
+                    } else {
+                        const centerLine = Math.round(avg) + 0.5;
+                        lines = [centerLine - 1, centerLine, centerLine + 1].filter(l => l > 0);
+                    }
+
+                    let ouHtml = `<table class="w-full text-center"><thead><tr class="text-gray-500"><th>Line</th><th>Over</th><th>Under</th><th class="text-gray-400 text-xs">Over%</th><th class="text-gray-400 text-xs">Under%</th></tr></thead><tbody>`;
 
                     lines.forEach(line => {
                          const overCount = groupData[dataKey].filter(val => val > line).length;
@@ -1384,7 +1708,7 @@
                          const probUnder = underCount / currentNumSims;
                          const oddOver = calculateOddWithMargin(probOver, ouMarginDecimal);
                          const oddUnder = calculateOddWithMargin(probUnder, ouMarginDecimal);
-                         ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td></tr>`;
+                         ouHtml += `<tr><td>${line.toFixed(1)}</td><td>${oddOver}</td><td>${oddUnder}</td><td class="text-gray-400 text-xs">${(probOver*100).toFixed(1)}%</td><td class="text-gray-400 text-xs">${(probUnder*100).toFixed(1)}%</td></tr>`;
                     });
                      ouHtml += `</tbody></table>`;
                      resultElement.innerHTML = ouHtml;
@@ -1533,11 +1857,12 @@
             eloDataEl.value = "";
             bracketDataEl.value = "";
             parsedMatches=[]; parsedBracketMatches=[]; teamEloRatings={}; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
+            lockedScenarios = {};
             runButtonEl.disabled=true; loaderEl.classList.add('hidden'); parseButtonEl.disabled=false;
             csvFileInputEl.value=null; csvFileNameEl.textContent="No file selected.";
             eloCsvFileInputEl.value=null; eloCsvFileNameEl.textContent="No file selected.";
             bracketCsvFileInputEl.value=null; bracketCsvFileNameEl.textContent="No file selected.";
-            populateSimGroupSelect(); 
+            populateSimGroupSelect();
             populateTournamentTeamSelect();
             calculatedOddsResultContentEl.innerHTML = 'Select a group and click "Show/Refresh Market Odds" to see results.';
             simulatedOddsStatusEl.textContent = "";
@@ -1556,6 +1881,10 @@
             document.getElementById('expectedFourthPlaceGF').textContent = '';
             tournamentTeamOddsStatusEl.textContent = '';
             tournamentTeamOddsResultContentEl.innerHTML = 'Click "Show Tournament Odds" to view winner market odds and margin.';
+            scenarioLockSectionEl.classList.add('hidden');
+            exportRawDataSectionEl.classList.add('hidden');
+            multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
+            multiGroupViewStatusEl.textContent = '';
         });
 
         // --- Initial Sample Data ---
@@ -1612,50 +1941,50 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
 
             const prob1st = (teamData.posCounts[0] || 0) / currentNumSims;
             const odd1st = calculateOddWithMargin(prob1st, marginDecimal);
-            csvContent += toCsvRow("Pobednik grupe", odd1st);
+            csvContent += toCsvRow(t('groupWinner'), odd1st);
 
             const probQualify = (teamData.advanceToKnockoutCount || 0) / currentNumSims;
             const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
-            csvContent += toCsvRow(`Prolazi dalje (${advancementPreset.label})`, oddQualify);
+            csvContent += toCsvRow(`${t('advanceFurther')} (${advancementPreset.label})`, oddQualify);
 
             const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
             const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
-            csvContent += toCsvRow("2. mesto u grupi", odd2nd);
+            csvContent += toCsvRow(t('place2'), odd2nd);
 
             const prob3rd = (teamData.posCounts[2] || 0) / currentNumSims;
             const odd3rd = calculateOddWithMargin(prob3rd, marginDecimal);
-            csvContent += toCsvRow("3. mesto u grupi", odd3rd);
+            csvContent += toCsvRow(t('place3'), odd3rd);
 
             const probDirectQualify = (teamData.autoQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow(`Direktan prolaz (Top ${advancementPreset.autoQualifiersPerGroup})`, calculateOddWithMargin(probDirectQualify, marginDecimal));
+            csvContent += toCsvRow(t('directQual', { n: advancementPreset.autoQualifiersPerGroup }), calculateOddWithMargin(probDirectQualify, marginDecimal));
 
             const probBestThirdQualify = (teamData.bestThirdQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow("Prolaz kao najbolja 3.", calculateOddWithMargin(probBestThirdQualify, marginDecimal));
+            csvContent += toCsvRow(t('bestThirdQual'), calculateOddWithMargin(probBestThirdQualify, marginDecimal));
 
             const prob4th = (teamData.posCounts[3] || 0) / currentNumSims;
             const odd4th = calculateOddWithMargin(prob4th, marginDecimal);
-            csvContent += toCsvRow("4. mesto u grupi", odd4th);
+            csvContent += toCsvRow(t('place4'), odd4th);
 
             const ptsSims = teamData.ptsSims;
             [0,1,2,3,4,5,6,7,9].forEach(pts => {
                 const probPts = ptsSims.filter(p => p === pts).length / currentNumSims;
                 const oddPts = calculateOddWithMargin(probPts, marginDecimal);
-                csvContent += toCsvRow(`${pts} bodova u grupi`, oddPts);
+                csvContent += toCsvRow(t('ptsExact', { n: pts }), oddPts);
             });
 
             const range1_3 = ptsSims.filter(p => p >= 1 && p <= 3).length / currentNumSims;
-            csvContent += toCsvRow("1-3 boda u grupi", calculateOddWithMargin(range1_3, marginDecimal));
+            csvContent += toCsvRow(t('pts1_3'), calculateOddWithMargin(range1_3, marginDecimal));
             const range2_4 = ptsSims.filter(p => p >= 2 && p <= 4).length / currentNumSims;
-            csvContent += toCsvRow("2-4 boda u grupi", calculateOddWithMargin(range2_4, marginDecimal));
+            csvContent += toCsvRow(t('pts2_4'), calculateOddWithMargin(range2_4, marginDecimal));
             const range4_6 = ptsSims.filter(p => p >= 4 && p <= 6).length / currentNumSims;
-            csvContent += toCsvRow("4-6 bodova u grupi", calculateOddWithMargin(range4_6, marginDecimal));
-            
+            csvContent += toCsvRow(t('pts4_6'), calculateOddWithMargin(range4_6, marginDecimal));
+
             [5.5, 6.5, 7.5].forEach(line => {
                 const overProb = ptsSims.filter(p => p > line).length / currentNumSims;
                 const underProb = ptsSims.filter(p => p < line).length / currentNumSims;
                 const overOdd = calculateOddWithMargin(overProb, marginDecimal);
                 const underOdd = calculateOddWithMargin(underProb, marginDecimal);
-                csvContent += toCsvRow(`Osvojenih bodova u grupi`, line, overOdd, underOdd);
+                csvContent += toCsvRow(t('ptsOU'), line, overOdd, underOdd);
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1691,15 +2020,15 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
                 return;
             }
 
-            let csvContent = `LEAGUE_NAME: Grupa ${groupKey}\n`;
+            let csvContent = `LEAGUE_NAME: ${t('leagueName', { g: groupKey })}\n`;
             const { date, time } = getCsvExportDateTime();
             const toCsvRow = (market, submarket, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}","${submarket}",${odd1},${odd2},${odd3}\n`;
-            
+
             // Group Specials
             const prob9pts = (groupData.anyTeam9PtsCount || 0) / currentNumSims;
-            csvContent += toCsvRow('Bilo koji tim', '9 bodova', calculateOddWithMargin(prob9pts, marginDecimal));
+            csvContent += toCsvRow(t('anyTeam'), t('pts9'), calculateOddWithMargin(prob9pts, marginDecimal));
             const prob0pts = (groupData.anyTeam0PtsCount || 0) / currentNumSims;
-            csvContent += toCsvRow('Bilo koji tim', '0 bodova', calculateOddWithMargin(prob0pts, marginDecimal));
+            csvContent += toCsvRow(t('anyTeam'), t('pts0'), calculateOddWithMargin(prob0pts, marginDecimal));
 
             // Over/Under for 1st/4th place points
             const firstPtsSims = groupData.firstPlacePtsSims || [];
@@ -1707,7 +2036,7 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
                 [4.5, 6.5, 7.5].forEach(line => {
                     const overProb = firstPtsSims.filter(p => p > line).length / currentNumSims;
                     const underProb = firstPtsSims.filter(p => p < line).length / currentNumSims;
-                    csvContent += toCsvRow('Uk. bodova', 'Prvoplasirani tim', line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
+                    csvContent += toCsvRow(t('ptsOU'), t('firstPlaced'), line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
                 });
             }
             const fourthPtsSims = groupData.fourthPlacePtsSims || [];
@@ -1715,7 +2044,7 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
                  [0.5, 1.5, 2.5].forEach(line => {
                     const overProb = fourthPtsSims.filter(p => p > line).length / currentNumSims;
                     const underProb = fourthPtsSims.filter(p => p < line).length / currentNumSims;
-                    csvContent += toCsvRow('Uk. bodova', 'Poslednjeplasirani tim', line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
+                    csvContent += toCsvRow(t('ptsOU'), t('lastPlaced'), line, calculateOddWithMargin(overProb, marginDecimal), calculateOddWithMargin(underProb, marginDecimal));
                 });
             }
 
@@ -1724,21 +2053,21 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             allSF.forEach(([key, count]) => {
                 const prob = count / currentNumSims;
                 const marketName = key.replace(' (1st) - ', '/').replace(' (2nd)', '');
-                csvContent += toCsvRow(marketName, "Tacan poredak 1-2", calculateOddWithMargin(prob, marginDecimal));
+                csvContent += toCsvRow(marketName, t('exactOrder12'), calculateOddWithMargin(prob, marginDecimal));
             });
 
             // Advancing Doubles
-             const allAD = Object.entries(groupData.advancingDoubles || {}).sort(([,a],[,b])=>b-a);
-             allAD.forEach(([key, count]) => {
+            const allAD = Object.entries(groupData.advancingDoubles || {}).sort(([,a],[,b])=>b-a);
+            allAD.forEach(([key, count]) => {
                 const prob = count / currentNumSims;
                 const marketName = key.replace(' & ', '/');
-                csvContent += toCsvRow(marketName, "Prva dva u grupi", calculateOddWithMargin(prob, marginDecimal));
+                csvContent += toCsvRow(marketName, t('topTwoAny'), calculateOddWithMargin(prob, marginDecimal));
             });
 
             // Group Winner
             teams.forEach(team => {
                 const prob = (groupData[team].posCounts[0] || 0) / currentNumSims;
-                csvContent += toCsvRow(team, "Pobednik grupe", calculateOddWithMargin(prob, marginDecimal));
+                csvContent += toCsvRow(team, t('groupWinner'), calculateOddWithMargin(prob, marginDecimal));
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1754,5 +2083,24 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             }
         });
 
+        // --- New Feature: Scenario Lock clear button ---
+        clearLocksBtnEl.addEventListener('click', () => {
+            lockedScenarios = {};
+            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-select').forEach(sel => { sel.value = 'simulate'; });
+        });
 
-    
+        // --- New Feature: Export Raw Simulation Data ---
+        exportRawDataBtnEl.addEventListener('click', exportRawSimData);
+
+        // --- New Feature: Multi-Group View ---
+        showMultiGroupViewBtnEl.addEventListener('click', displayMultiGroupView);
+
+        // --- New Feature: Language Toggle ---
+        langToggleBtnEl.addEventListener('click', () => {
+            currentLanguage = currentLanguage === 'en' ? 'sr' : 'en';
+            langToggleBtnEl.textContent = currentLanguage === 'en' ? '🌐 EN / SR' : '🌐 SR / EN';
+            langToggleBtnEl.title = `Current language: ${currentLanguage.toUpperCase()}. Click to switch.`;
+        });
+
+
+
