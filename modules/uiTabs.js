@@ -1,22 +1,29 @@
-export function openTab(event, tabName) {
-    let i, tabcontent, tabbuttons;
-    tabcontent = document.getElementsByClassName("tab-content");
-    for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-        tabcontent[i].classList.remove("active");
-    }
-    tabbuttons = document.getElementsByClassName("tab-button");
-    for (i = 0; i < tabbuttons.length; i++) {
-        tabbuttons[i].classList.remove("active");
-    }
-    document.getElementById(tabName).style.display = "block";
-    document.getElementById(tabName).classList.add("active");
-    event.currentTarget.classList.add("active");
-}
-
 export function initializeTabSwitching() {
-    window.openTab = openTab;
     document.addEventListener('DOMContentLoaded', () => {
-        document.querySelector('.tab-button')?.click();
+        const buttons = document.querySelectorAll('.tab-button[data-tab]');
+        const contents = document.querySelectorAll('.tab-content');
+
+        function activateTab(tabId) {
+            contents.forEach(el => {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            const target = document.getElementById(tabId);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            }
+            const btn = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+            if (btn) btn.classList.add('active');
+        }
+
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+        });
+
+        // Activate first tab on load
+        if (buttons.length > 0) activateTab(buttons[0].dataset.tab);
     });
 }

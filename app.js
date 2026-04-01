@@ -93,6 +93,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const showTournamentTeamOddsButtonEl = document.getElementById('showTournamentTeamOddsButton');
         const tournamentTeamOddsStatusEl = document.getElementById('tournamentTeamOddsStatus');
         const tournamentTeamOddsResultContentEl = document.getElementById('tournamentTeamOddsResultContent');
+        const lambdaViewContentEl = document.getElementById('lambdaViewContent');
         const scenarioLockSectionEl = document.getElementById('scenarioLockSection');
         const scenarioLockTableBodyEl = document.getElementById('scenarioLockTableBody');
         const clearLocksBtnEl = document.getElementById('clearLocksBtn');
@@ -104,6 +105,141 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const multiGroupViewContentEl = document.getElementById('multiGroupViewContent');
         const multiGroupMarginEl = document.getElementById('multiGroupMargin');
         const langToggleBtnEl = document.getElementById('langToggleBtn');
+        const matchDataSectionEl = document.getElementById('matchDataSection');
+        const eloSectionEl = document.getElementById('eloSection');
+        const exportRawDataErrorEl = document.getElementById('exportRawDataError');
+        const generateTeamCsvErrorEl = document.getElementById('generateTeamCsvError');
+        const generateGroupCsvErrorEl = document.getElementById('generateGroupCsvError');
+
+        // --- Status Bar Helper ---
+        const _STATUS_ICONS = {
+            success: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>`,
+            error:   `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+            warning: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+            info:    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+        };
+
+        function renderStatus(type, message, { detail = null, items = [], warnings = [] } = {}) {
+            const icon = _STATUS_ICONS[type] || _STATUS_ICONS.info;
+            let html = `<div class="status-bar status-${type}"><span class="status-icon">${icon}</span><div class="status-body"><p>${message}</p>`;
+            if (detail) html += `<p>${detail}</p>`;
+            if (items.length) html += `<ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+            html += `</div></div>`;
+            if (warnings.length) {
+                html += `<div class="status-bar status-warning" style="margin-top:0.375rem"><span class="status-icon">${_STATUS_ICONS.warning}</span><div class="status-body"><p>Warnings (${warnings.length}):</p><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div></div>`;
+            }
+            statusAreaEl.innerHTML = html;
+        }
+
+        function showInlineError(el, msg, duration = 4000) {
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.add('visible');
+            if (duration > 0) setTimeout(() => el.classList.remove('visible'), duration);
+        }
+
+        // --- Probability CSS Class Helper ---
+        function probToClass(pctVal) {
+            if (isNaN(pctVal)) return '';
+            if (pctVal >= 50) return 'prob-high';
+            if (pctVal >= 20) return 'prob-mid';
+            return 'prob-low';
+        }
+
+        function renderLambdaView() {
+            if (!lambdaViewContentEl) return;
+            if (!parsedMatches.length) {
+                lambdaViewContentEl.innerHTML = 'Parse data first to inspect team and match lambdas.';
+                return;
+            }
+
+            const teamRows = [];
+            const teamStats = {};
+            parsedMatches.forEach(match => {
+                if (!teamStats[match.team1]) teamStats[match.team1] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0 };
+                if (!teamStats[match.team2]) teamStats[match.team2] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0 };
+                teamStats[match.team1].matches += 1;
+                teamStats[match.team1].lambdaFor += match.lambda1;
+                teamStats[match.team1].lambdaAgainst += match.lambda2;
+                teamStats[match.team2].matches += 1;
+                teamStats[match.team2].lambdaFor += match.lambda2;
+                teamStats[match.team2].lambdaAgainst += match.lambda1;
+            });
+
+            Object.entries(teamStats)
+                .sort(([teamA, statsA], [teamB, statsB]) => statsA.group.localeCompare(statsB.group) || teamA.localeCompare(teamB))
+                .forEach(([team, stats]) => {
+                    const matches = stats.matches || 1;
+                    teamRows.push(`
+                        <tr>
+                            <td>${stats.group}</td>
+                            <td class="font-medium">${team}</td>
+                            <td>${stats.matches}</td>
+                            <td>${stats.lambdaFor.toFixed(3)}</td>
+                            <td>${stats.lambdaAgainst.toFixed(3)}</td>
+                            <td>${(stats.lambdaFor - stats.lambdaAgainst).toFixed(3)}</td>
+                        </tr>
+                    `);
+                });
+
+            const matchRows = parsedMatches
+                .slice()
+                .sort((a, b) => a.group.localeCompare(b.group) || a.lineNum - b.lineNum)
+                .map(match => `
+                    <tr>
+                        <td>${match.group}</td>
+                        <td>${match.lineNum}</td>
+                        <td class="font-medium">${match.team1}</td>
+                        <td class="font-medium">${match.team2}</td>
+                        <td>${match.lambda1.toFixed(3)}</td>
+                        <td>${match.lambda2.toFixed(3)}</td>
+                        <td>${(match.lambda1 + match.lambda2).toFixed(3)}</td>
+                        <td>${(match.lambda1 - match.lambda2).toFixed(3)}</td>
+                    </tr>
+                `)
+                .join('');
+
+            lambdaViewContentEl.innerHTML = `
+                <div class="mb-6">
+                    <h3 class="text-base font-semibold text-gray-700 mb-2">Team Group-Stage Lambda Sums</h3>
+                    <div class="overflow-x-auto">
+                        <table class="odds-table text-xs sm:text-sm">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Team</th>
+                                    <th>Matches</th>
+                                    <th>Lambda For Sum</th>
+                                    <th>Lambda Against Sum</th>
+                                    <th>Net Lambda Sum</th>
+                                </tr>
+                            </thead>
+                            <tbody>${teamRows.join('')}</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-base font-semibold text-gray-700 mb-2">Match Lambdas</h3>
+                    <div class="overflow-x-auto">
+                        <table class="odds-table text-xs sm:text-sm">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Line</th>
+                                    <th>Team 1</th>
+                                    <th>Team 2</th>
+                                    <th>Lambda 1</th>
+                                    <th>Lambda 2</th>
+                                    <th>Total</th>
+                                    <th>Supremacy</th>
+                                </tr>
+                            </thead>
+                            <tbody>${matchRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
 
         const tieBreakRulePresets = {
             uefa_competition: {
@@ -201,8 +337,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (file) {
                 csvFileNameEl.textContent = file.name;
                 const reader = new FileReader();
-                reader.onload = (e) => { matchDataEl.value = e.target.result; statusAreaEl.innerHTML = `<p class="text-blue-500">CSV loaded. Click "Parse & Validate Data".</p>`; };
-                reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading file: ${e.target.error.name}</p>`; csvFileNameEl.textContent = "No file selected."; };
+                reader.onload = (e) => { matchDataEl.value = e.target.result; renderStatus('info', 'CSV loaded. Click "Parse &amp; Validate Data".'); };
+                reader.onerror = (e) => { renderStatus('error', `Error reading file: ${e.target.error.name}`); csvFileNameEl.textContent = "No file selected."; };
                 reader.readAsText(file);
             } else { csvFileNameEl.textContent = "No file selected."; }
         });
@@ -212,8 +348,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (file) {
                 eloCsvFileNameEl.textContent = file.name;
                 const reader = new FileReader();
-                reader.onload = (e) => { eloDataEl.value = e.target.result; statusAreaEl.innerHTML = `<p class="text-blue-500">Elo CSV loaded. Click "Parse & Validate Data".</p>`; };
-                reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading Elo file: ${e.target.error.name}</p>`; eloCsvFileNameEl.textContent = "No file selected."; };
+                reader.onload = (e) => { eloDataEl.value = e.target.result; renderStatus('info', 'Elo CSV loaded. Click "Parse &amp; Validate Data".'); };
+                reader.onerror = (e) => { renderStatus('error', `Error reading Elo file: ${e.target.error.name}`); eloCsvFileNameEl.textContent = "No file selected."; };
                 reader.readAsText(file);
             } else { eloCsvFileNameEl.textContent = "No file selected."; }
         });
@@ -223,8 +359,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (file) {
                 bracketCsvFileNameEl.textContent = file.name;
                 const reader = new FileReader();
-                reader.onload = (e) => { bracketDataEl.value = e.target.result; statusAreaEl.innerHTML = `<p class="text-blue-500">Bracket CSV loaded. Click "Parse & Validate Data".</p>`; };
-                reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading bracket file: ${e.target.error.name}</p>`; bracketCsvFileNameEl.textContent = "No file selected."; };
+                reader.onload = (e) => { bracketDataEl.value = e.target.result; renderStatus('info', 'Bracket CSV loaded. Click "Parse &amp; Validate Data".'); };
+                reader.onerror = (e) => { renderStatus('error', `Error reading bracket file: ${e.target.error.name}`); bracketCsvFileNameEl.textContent = "No file selected."; };
                 reader.readAsText(file);
             } else { bracketCsvFileNameEl.textContent = "No file selected."; }
         });
@@ -233,13 +369,21 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const mode = inputModeEl.value;
             const isEloMode = mode === 'elo';
             const isHybridMode = mode === 'hybrid';
+            const isOddsMode = mode === 'odds';
+
+            // Show/hide whole sections instead of just disabling
+            if (matchDataSectionEl) matchDataSectionEl.classList.toggle('hidden', isEloMode);
+            if (eloSectionEl) eloSectionEl.classList.toggle('hidden', isOddsMode);
+
+            // Keep disabled flags in sync for form submission safety
             matchDataEl.disabled = isEloMode;
             csvFileInputEl.disabled = isEloMode;
-            eloDataEl.disabled = mode === 'odds';
-            eloCsvFileInputEl.disabled = mode === 'odds';
+            eloDataEl.disabled = isOddsMode;
+            eloCsvFileInputEl.disabled = isOddsMode;
+
             parseButtonEl.textContent = isEloMode
-                ? '1. Parse Elo & Build Fixtures'
-                : (isHybridMode ? '1. Parse Hybrid Data' : '1. Parse & Validate Data');
+                ? 'Parse Elo & Build Fixtures'
+                : (isHybridMode ? 'Parse Hybrid Data' : 'Parse & Validate Data');
         }
         inputModeEl.addEventListener('change', updateInputModeUi);
         
@@ -835,7 +979,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const normalized = parts.map(p => String(p).trim().toUpperCase());
             return normalized.length >= 4
                 && normalized[0] === 'ROUND'
-                && normalized[1] === 'MATCH';
+                && (normalized[1] === 'MATCH' || normalized[1] === 'MATCH_ID' || normalized[1] === 'MATCHID');
         }
 
         function parseBracketInputData() {
@@ -920,23 +1064,29 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             teamEloRatings = shouldParseEloForKnockout && eloParsed.errors.length === 0 ? eloParsed.eloMap : {};
             const errors = [...coreParsed.errors, ...bracketParsed.errors, ...eloParsed.errors.map(e => `[Elo] ${e}`)];
             const warnings = [...coreParsed.warnings, ...bracketParsed.warnings, ...eloParsed.warnings.map(w => `[Elo] ${w}`)];
-            if (errors.length > 0) { statusAreaEl.innerHTML = `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = true; }
-            else {
+            if (errors.length > 0) {
+                renderStatus('error', `Parse failed (${errors.length} error${errors.length > 1 ? 's' : ''})`, { items: errors, warnings });
+                runButtonEl.disabled = true;
+                renderLambdaView();
+            } else {
                 const modeLabel = mode === 'elo' ? 'Elo-generated fixtures' : (mode === 'hybrid' ? 'hybrid (odds + Elo fill)' : 'odds input');
-                statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${modeLabel}).</p><p class="text-blue-600">Bracket rows loaded: ${parsedBracketMatches.length}. Elo ratings loaded: ${Object.keys(teamEloRatings).length} teams.</p>`;
-                if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`;
+                renderStatus('success', `Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} groups, ${allTeams.size} teams (${modeLabel}).`, {
+                    detail: `Bracket rows: ${parsedBracketMatches.length}. Elo ratings: ${Object.keys(teamEloRatings).length} teams.`,
+                    warnings
+                });
                 runButtonEl.disabled = false;
                 resultsContentEl.innerHTML = "Parsed. Ready for sim.";
                 buildScenarioLockUI();
+                renderLambdaView();
             }
         });
 
 
         // --- Simulation Logic ---
         runButtonEl.addEventListener('click', () => {
-            if (parsedMatches.length === 0) { statusAreaEl.innerHTML = '<p class="text-red-500">No data.</p>'; return; }
-            currentNumSims = parseInt(numSimulationsEl.value); if (isNaN(currentNumSims) || currentNumSims <= 0) { statusAreaEl.innerHTML = '<p class="text-red-500">Sims > 0.</p>'; return; }
-            loaderEl.classList.remove('hidden'); statusAreaEl.innerHTML = `<p class="text-blue-500">Running ${currentNumSims} sims...</p>`;
+            if (parsedMatches.length === 0) { renderStatus('error', 'No parsed data. Click "Parse &amp; Validate Data" first.'); return; }
+            currentNumSims = parseInt(numSimulationsEl.value); if (isNaN(currentNumSims) || currentNumSims <= 0) { renderStatus('error', 'Number of simulations must be greater than 0.'); return; }
+            loaderEl.classList.remove('hidden'); renderStatus('info', `Running ${currentNumSims.toLocaleString()} simulations...`);
             resultsContentEl.innerHTML = ""; runButtonEl.disabled = true; parseButtonEl.disabled = true;
             
             setTimeout(() => {
@@ -946,16 +1096,16 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                         displayResults(simulationAggStats, currentNumSims);
                     } catch (displayError) {
                         console.error("DisplayResults Error:", displayError);
-                        statusAreaEl.innerHTML += `<p class="text-red-500">Error displaying results: ${displayError.message}</p>`;
+                        statusAreaEl.innerHTML += `<div class="status-bar status-error" style="margin-top:0.375rem"><span class="status-icon">${_STATUS_ICONS.error}</span><div class="status-body"><p>Error displaying results: ${displayError.message}</p></div></div>`;
                     }
                     populateSimGroupSelect();
                     populateTournamentTeamSelect();
                     exportRawDataSectionEl.classList.remove('hidden');
                     multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
-                    statusAreaEl.innerHTML = `<p class="text-green-500">Sim complete! (${currentNumSims} runs)</p>`;
-                } catch (simError) { 
+                    renderStatus('success', `Simulation complete! (${currentNumSims.toLocaleString()} runs)`);
+                } catch (simError) {
                     console.error("Sim Error:", simError);
-                    statusAreaEl.innerHTML = `<p class="text-red-500">Error during simulation: ${simError.message}</p>`;
+                    renderStatus('error', `Error during simulation: ${simError.message}`);
                     simulationAggStats = {}; 
                     populateSimGroupSelect(); 
                     populateTournamentTeamSelect();
@@ -1221,7 +1371,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 const groupData = aggStats[groupKey]; if (!groupData) continue;
                 html += `<div class="mb-8 p-4 bg-white border border-gray-200 rounded-lg shadow"><h3 class="text-lg font-semibold text-indigo-600 mb-3">Group ${groupKey}</h3>`;
                 html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Expected Team Stats:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','E(Pts)','E(Wins)','E(GF)','E(GA)','P(Most GF)','P(Most GA)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-                (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts||!ts.ptsSims)return; const avgPts=(ts.ptsSims.length>0&&numSims>0)?ts.ptsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgWins=(ts.winsSims&&ts.winsSims.length>0&&numSims>0)?ts.winsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGF=(ts.gfSims.length>0&&numSims>0)?ts.gfSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGA=(ts.gaSims.length>0&&numSims>0)?ts.gaSims.reduce((a,b)=>a+b,0)/numSims:0; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td><td class="px-2 py-2">${avgPts.toFixed(2)}</td><td class="px-2 py-2">${avgWins.toFixed(2)}</td><td class="px-2 py-2">${avgGF.toFixed(2)}</td><td class="px-2 py-2">${avgGA.toFixed(2)}</td><td class="px-2 py-2">${(numSims>0?ts.mostGFCount/numSims*100:0).toFixed(1)}%</td><td class="px-2 py-2">${(numSims>0?ts.mostGACount/numSims*100:0).toFixed(1)}%</td></tr>`;});
+                (groupTeamNames[groupKey]||[]).forEach(teamName=>{const ts=groupData[teamName];if(!ts||!ts.ptsSims)return; const avgPts=(ts.ptsSims.length>0&&numSims>0)?ts.ptsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgWins=(ts.winsSims&&ts.winsSims.length>0&&numSims>0)?ts.winsSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGF=(ts.gfSims.length>0&&numSims>0)?ts.gfSims.reduce((a,b)=>a+b,0)/numSims:0; const avgGA=(ts.gaSims.length>0&&numSims>0)?ts.gaSims.reduce((a,b)=>a+b,0)/numSims:0; const pMostGF=numSims>0?ts.mostGFCount/numSims*100:0; const pMostGA=numSims>0?ts.mostGACount/numSims*100:0; html+=`<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${teamName}</td><td class="px-2 py-2">${avgPts.toFixed(2)}</td><td class="px-2 py-2">${avgWins.toFixed(2)}</td><td class="px-2 py-2">${avgGF.toFixed(2)}</td><td class="px-2 py-2">${avgGA.toFixed(2)}</td><td class="px-2 py-2 ${probToClass(pMostGF)}">${pMostGF.toFixed(1)}%</td><td class="px-2 py-2 ${probToClass(pMostGA)}">${pMostGA.toFixed(1)}%</td></tr>`;});
                 html += `</tbody></table>`;
                 const avgGroupGoals = (groupData.groupTotalGoalsSims&&groupData.groupTotalGoalsSims.length>0&&numSims>0)?groupData.groupTotalGoalsSims.reduce((a,b)=>a+b,0)/numSims:0;
                 html += `<p class="mt-2 text-sm"><strong>Expected Total Goals in Group ${groupKey}:</strong> ${avgGroupGoals.toFixed(2)}</p>`;
@@ -1241,7 +1391,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 knockoutTeams
                     .sort(([a], [b]) => a.localeCompare(b))
                     .forEach(([team, stats]) => {
-                        html += `<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${team}</td><td class="px-2 py-2">${(stats.reachR16 / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachQF / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachSF / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachFINAL / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2 font-semibold">${(stats.winFINAL / numSims * 100).toFixed(1)}%</td></tr>`;
+                        const pR16=(stats.reachR16/numSims*100),pQF=(stats.reachQF/numSims*100),pSF=(stats.reachSF/numSims*100),pFin=(stats.reachFINAL/numSims*100),pChamp=(stats.winFINAL/numSims*100);
+                        html += `<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${team}</td><td class="px-2 py-2 ${probToClass(pR16)}">${pR16.toFixed(1)}%</td><td class="px-2 py-2 ${probToClass(pQF)}">${pQF.toFixed(1)}%</td><td class="px-2 py-2 ${probToClass(pSF)}">${pSF.toFixed(1)}%</td><td class="px-2 py-2 ${probToClass(pFin)}">${pFin.toFixed(1)}%</td><td class="px-2 py-2 font-semibold ${probToClass(pChamp)}">${pChamp.toFixed(1)}%</td></tr>`;
                     });
                 html += `</tbody></table></div>`;
             }
@@ -1352,9 +1503,11 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     row += `<td class="px-2 py-1.5 font-semibold text-indigo-600">${idx === 0 ? `Gr. ${gK}` : ''}</td>`;
                     row += `<td class="px-2 py-1.5 font-medium">${teamName}</td>`;
                     for (let i = 0; i < 4; i++) {
-                        row += `<td class="px-2 py-1.5 text-center">${(pPos(i) * 100).toFixed(1)}%</td>`;
+                        const pPct = pPos(i) * 100;
+                        row += `<td class="px-2 py-1.5 text-center ${probToClass(pPct)}">${pPct.toFixed(1)}%</td>`;
                     }
-                    row += `<td class="px-2 py-1.5 text-center font-semibold ${pQual > 0.5 ? 'text-green-700' : ''}">${(pQual * 100).toFixed(1)}%</td>`;
+                    const pQualPct = pQual * 100;
+                    row += `<td class="px-2 py-1.5 text-center font-semibold ${probToClass(pQualPct)}">${pQualPct.toFixed(1)}%</td>`;
                     row += `<td class="px-2 py-1.5 text-center">${avgPts.toFixed(2)}</td>`;
                     if (hasKnockout) {
                         const kpStats = simulationAggStats._knockout?.teamProgress?.[teamName];
@@ -1386,7 +1539,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         // --- Raw Simulation Data Export ---
         function exportRawSimData() {
             if (currentNumSims === 0 || Object.keys(simulationAggStats).length === 0) {
-                alert('Run simulation first.');
+                showInlineError(exportRawDataErrorEl, 'Run simulation first.');
                 return;
             }
 
@@ -1763,7 +1916,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         // --- Clear Button ---
         clearButtonEl.addEventListener('click', () => {
-            matchDataEl.value = ""; numSimulationsEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = "Results will appear here...";
+            matchDataEl.value = ""; numSimulationsEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = '<span class="text-gray-400">Results will appear here...</span>';
             eloDataEl.value = "";
             bracketDataEl.value = "";
             parsedMatches=[]; parsedBracketMatches=[]; teamEloRatings={}; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
@@ -1795,22 +1948,165 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             exportRawDataSectionEl.classList.add('hidden');
             multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
             multiGroupViewStatusEl.textContent = '';
+            renderLambdaView();
         });
 
         // --- Initial Sample Data ---
-        matchDataEl.value = `A Germany vs Scotland 1.30 5.50 11.00 2.10 1.70
-A Hungary vs Switzerland 3.50 3.20 2.25 1.60 2.30
-A Germany vs Hungary 1.30 5.00 10.00 2.30 1.60
-A Scotland vs Switzerland 4.50 3.60 1.85 1.70 2.15
-A Switzerland vs Germany 5.00 4.00 1.70 2.00 1.80
-A Scotland vs Hungary 2.80 3.40 2.50 1.90 1.90
-B Spain vs Croatia 1.90 3.40 4.50 1.75 2.10
-B Italy vs Albania 1.40 4.50 9.00 1.90 1.90
-B Croatia vs Albania 1.50 4.00 7.50 1.80 2.00
-B Spain vs Italy 2.20 3.20 3.60 1.65 2.20
-B Albania vs Spain 10.00 5.50 1.30 2.00 1.80
-B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
-        eloDataEl.value = ``;
+        inputModeEl.value = 'hybrid';
+        matchDataEl.value = `A	Mexico	vs	South Africa	1.52	4.07	5.99	1.87	1.92
+A	South Korea	vs	Czech Republic	2.58	3.18	2.70	1.67	2.20
+B	Canada	vs	Bosnia and Herzegovina	2.25	3.40	3.02	1.73	2.10
+B	Qatar	vs	Switzerland	8.50	5.65	1.30	2.23	1.62
+C	Haiti	vs	Scotland	6.58	5.20	1.38	2.07	1.74
+C	Brazil	vs	Morocco	1.60	3.75	5.70	1.92	1.87
+D	USA	vs	Paraguay	1.90	3.70	3.70	1.81	1.99
+D	Australia	vs	Turkey	4.75	3.80	1.62	1.73	2.10
+E	Germany	vs	Curaçao	1.02	21.00	41.00	5.00	1.17
+E	Ivory Coast	vs	Ecuador	3.20	2.77	2.46	1.51	2.50
+F	Netherlands	vs	Japan	2.02	3.44	3.61	1.90	1.90
+F	Sweden	vs	Tunisia	1.83	3.50	3.80	1.67	2.20
+G	Belgium	vs	Egypt	1.52	4.42	5.40	2.08	1.73
+G	Iran	vs	New Zealand	1.77	3.60	4.25	1.73	2.10
+H	Spain	vs	Cape Verde	1.06	11.00	23.00	3.40	1.33
+H	Saudi Arabia	vs	Uruguay	5.40	3.85	1.60	1.85	1.95
+I	France	vs	Senegal	1.40	4.68	7.12	2.10	1.72
+I	Iraq	vs	Norway	6.00	4.50	1.40	2.15	1.65
+J	Argentina	vs	Algeria	1.42	4.22	7.85	1.91	1.88
+J	Austria	vs	Jordan	1.35	5.06	7.75	2.25	1.62
+K	Portugal	vs	DR Congo	1.33	4.75	8.00	2.30	1.60
+K	Uzbekistan	vs	Colombia	7.00	4.12	1.46	1.93	1.87
+L	England	vs	Croatia	1.62	4.03	4.96	1.87	1.92
+L	Ghana	vs	Panama	2.03	3.79	3.28	1.80	2.00
+A	Czech Republic	vs	South Africa	1.83	4.35	4.44	2.15	1.65
+A	Mexico	vs	South Korea	1.98	4.17	3.92	2.20	1.62
+B	Switzerland	vs	Bosnia and Herzegovina	1.47	5.56	7.14	1.85	1.95
+B	Canada	vs	Qatar	1.53	5.26	6.45	1.90	1.90
+C	Brazil	vs	Haiti	1.04	40.00	100.00	1.35	3.15
+C	Scotland	vs	Morocco	4.00	4.17	1.96	2.20	1.62
+D	Turkey	vs	Paraguay	1.86	4.31	4.35	2.15	1.65
+D	USA	vs	Australia	1.53	5.26	6.45	1.90	1.90
+E	Germany	vs	Ivory Coast	1.35	6.45	9.52	1.75	2.05
+E	Ecuador	vs	Curaçao	1.14	12.50	25.00	1.55	2.45
+F	Netherlands	vs	Sweden	1.41	5.88	8.33	1.80	2.00
+F	Tunisia	vs	Japan	9.09	6.25	1.37	1.75	2.05
+G	Belgium	vs	Iran	1.40	6.06	8.33	1.80	2.00
+G	New Zealand	vs	Egypt	5.56	5.00	1.61	2.00	1.75
+H	Spain	vs	Saudi Arabia	1.04	33.33	100.00	1.35	3.15
+H	Uruguay	vs	Cape Verde	1.23	8.33	14.30	1.65	2.20
+I	Norway	vs	Senegal	1.65	4.76	5.41	2.05	1.70
+I	France	vs	Iraq	1.05	28.60	100.00	1.40	2.90
+J	Argentina	vs	Austria	1.20	9.09	18.20	1.60	2.30
+J	Jordan	vs	Algeria	6.06	5.13	1.56	1.95	1.85
+K	Portugal	vs	Uzbekistan	1.08	20.00	50.00	1.45	2.70
+K	Colombia	vs	DR Congo	1.18	9.52	20.00	1.60	2.30
+L	England	vs	Ghana	1.08	18.20	50.00	1.45	2.70
+L	Panama	vs	Croatia	10.00	6.67	1.33	1.70	2.10
+A	South Africa	vs	South Korea	4.76	4.44	1.77	2.10	1.70
+A	Czech Republic	vs	Mexico	4.35	4.26	1.87	2.15	1.65
+B	Switzerland	vs	Canada	1.82	4.35	4.55	2.10	1.70
+B	Bosnia and Herzegovina	vs	Qatar	1.92	4.26	4.08	2.15	1.65
+C	Scotland	vs	Brazil	15.40	9.09	1.21	1.65	2.20
+C	Morocco	vs	Haiti	1.16	11.10	20.00	1.55	2.45
+D	Australia	vs	Paraguay	3.23	4.00	2.27	2.25	1.60
+D	Turkey	vs	USA	3.03	3.92	2.41	2.30	1.55
+E	Ecuador	vs	Germany	5.88	5.13	1.57	1.95	1.85
+E	Curaçao	vs	Ivory Coast	14.30	8.33	1.23	1.65	2.20
+F	Tunisia	vs	Netherlands	16.70	9.09	1.20	1.60	2.30
+F	Japan	vs	Sweden	1.82	4.35	4.55	2.10	1.70
+G	New Zealand	vs	Belgium	16.70	9.09	1.20	1.60	2.30
+G	Egypt	vs	Iran	2.27	4.00	3.23	2.25	1.60
+H	Uruguay	vs	Spain	16.70	9.09	1.20	1.60	2.30
+H	Cape Verde	vs	Saudi Arabia	3.45	4.08	2.15	2.20	1.62
+I	Norway	vs	France	6.45	5.26	1.53	1.90	1.90
+I	Senegal	vs	Iraq	1.42	5.88	8.00	1.80	2.00
+J	Jordan	vs	Argentina	100.00	33.33	1.04	1.35	3.15
+J	Algeria	vs	Austria	4.00	4.17	1.96	2.20	1.62
+K	Colombia	vs	Portugal	4.35	4.31	1.86	2.15	1.65
+K	DR Congo	vs	Uzbekistan	2.47	3.92	2.94	2.35	1.50
+L	Panama	vs	England	66.70	28.60	1.05	1.40	2.90
+L	Croatia	vs	Ghana	1.53	5.26	6.45	1.90	1.90`;
+        eloDataEl.value = `GROUP,TEAM,ELO_RATING
+A,South Korea,1844
+A,Czech Republic,1731
+A,Mexico,1715
+A,South Africa,1602
+B,Switzerland,1897
+B,Canada,1744
+B,Bosnia and Herzegovina,1572
+B,Qatar,1540
+C,Brazil,1970
+C,Morocco,1785
+C,Scotland,1790
+C,Haiti,1420
+D,USA,1812
+D,Turkey,1880
+D,Australia,1733
+D,Paraguay,1722
+E,Germany,1910
+E,Ecuador,1933
+E,Ivory Coast,1720
+E,Curaçao,1355
+F,Netherlands,1959
+F,Sweden,1660
+F,Japan,1825
+F,Tunisia,1615
+G,Belgium,1850
+G,Iran,1810
+G,Egypt,1748
+G,New Zealand,1555
+H,Spain,2172
+H,Uruguay,1895
+H,Saudi Arabia,1588
+H,Cape Verde,1530
+I,France,2062
+I,Norway,1922
+I,Senegal,1792
+I,Iraq,1560
+J,Argentina,2113
+J,Austria,1818
+J,Algeria,1735
+J,Jordan,1525
+K,Portugal,1976
+K,Colombia,1975
+K,DR Congo,1515
+K,Uzbekistan,1645
+L,England,2042
+L,Croatia,1932
+L,Ghana,1610
+L,Panama,1655`;
+        bracketDataEl.value = `ROUND,MATCH_ID,TEAM_A,vs,TEAM_B
+R32,Match 74,Winner Group E,vs,3rd Group A/B/C/D/F
+R32,Match 77,Winner Group I,vs,3rd Group C/D/F/G/H
+R32,Match 73,Runner-up Group A,vs,Runner-up Group B
+R32,Match 75,Winner Group F,vs,Runner-up Group C
+R32,Match 83,Runner-up Group K,vs,Runner-up Group L
+R32,Match 84,Winner Group H,vs,Runner-up Group J
+R32,Match 81,Winner Group D,vs,3rd Group B/E/F/I/J
+R32,Match 82,Winner Group G,vs,3rd Group A/E/H/I/J
+R32,Match 76,Winner Group C,vs,Runner-up Group F
+R32,Match 78,Runner-up Group E,vs,Runner-up Group I
+R32,Match 79,Winner Group A,vs,3rd Group C/E/F/H/I
+R32,Match 80,Winner Group L,vs,3rd Group E/H/I/J/K
+R32,Match 86,Winner Group J,vs,Runner-up Group H
+R32,Match 88,Runner-up Group D,vs,Runner-up Group G
+R32,Match 85,Winner Group B,vs,3rd Group E/F/G/I/J
+R32,Match 87,Winner Group K,vs,3rd Group D/E/I/J/L
+R16,Match 89,Winner Match 74,vs,Winner Match 77
+R16,Match 90,Winner Match 73,vs,Winner Match 75
+R16,Match 93,Winner Match 83,vs,Winner Match 84
+R16,Match 94,Winner Match 81,vs,Winner Match 82
+R16,Match 91,Winner Match 76,vs,Winner Match 78
+R16,Match 92,Winner Match 79,vs,Winner Match 80
+R16,Match 95,Winner Match 86,vs,Winner Match 88
+R16,Match 96,Winner Match 85,vs,Winner Match 87
+QF,Match 97,Winner Match 89,vs,Winner Match 90
+QF,Match 98,Winner Match 93,vs,Winner Match 94
+QF,Match 99,Winner Match 91,vs,Winner Match 92
+QF,Match 100,Winner Match 95,vs,Winner Match 96
+SF,Match 101,Winner Match 97,vs,Winner Match 98
+SF,Match 102,Winner Match 99,vs,Winner Match 100
+3RD,Match 103,Loser Match 101,vs,Loser Match 102
+FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
 
         populateTieBreakPresets();
         populateAdvancementPresets();
@@ -1829,17 +2125,17 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             const advancementPreset = getSelectedAdvancementPreset();
             
             if (!groupKey || !teamName) {
-                alert("Please select a group and a team first.");
+                showInlineError(generateTeamCsvErrorEl, 'Please select a group and a team first.');
                 return;
             }
-             if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
-                alert("Please enter a valid margin between 0 and 100.");
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                showInlineError(generateTeamCsvErrorEl, 'Please enter a valid margin between 0 and 100.');
                 return;
             }
 
             const teamData = simulationAggStats[groupKey]?.[teamName];
             if (!teamData) {
-                alert("No simulation data found for the selected team.");
+                showInlineError(generateTeamCsvErrorEl, 'No simulation data found for the selected team.');
                 return;
             }
 
@@ -1915,17 +2211,17 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             const marginDecimal = marginPercent / 100;
 
             if (!groupKey) {
-                alert("Please select a group first.");
+                showInlineError(generateGroupCsvErrorEl, 'Please select a group first.');
                 return;
             }
-             if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
-                alert("Please enter a valid margin between 0 and 100.");
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                showInlineError(generateGroupCsvErrorEl, 'Please enter a valid margin between 0 and 100.');
                 return;
             }
             const groupData = simulationAggStats[groupKey];
             const teams = groupTeamNames[groupKey] || [];
             if (!groupData || teams.length === 0) {
-                alert("No simulation data found for the selected group.");
+                showInlineError(generateGroupCsvErrorEl, 'No simulation data found for the selected group.');
                 return;
             }
 
@@ -2007,7 +2303,9 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
         // --- New Feature: Language Toggle ---
         langToggleBtnEl.addEventListener('click', () => {
             currentLanguage = currentLanguage === 'en' ? 'sr' : 'en';
-            langToggleBtnEl.textContent = currentLanguage === 'en' ? '🌐 EN / SR' : '🌐 SR / EN';
+            const enPill = langToggleBtnEl.querySelector('[data-lang="en"]');
+            const srPill = langToggleBtnEl.querySelector('[data-lang="sr"]');
+            if (enPill) enPill.className = `lang-pill ${currentLanguage === 'en' ? 'lang-pill-active' : 'lang-pill-inactive'}`;
+            if (srPill) srPill.className = `lang-pill ${currentLanguage === 'sr' ? 'lang-pill-active' : 'lang-pill-inactive'}`;
             langToggleBtnEl.title = `Current language: ${currentLanguage.toUpperCase()}. Click to switch.`;
         });
-

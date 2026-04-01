@@ -10,115 +10,133 @@
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8">
     <div class="container mx-auto max-w-5xl bg-white p-6 rounded-lg shadow-xl">
-        <header class="mb-6 flex items-center justify-between flex-wrap gap-2">
-            <h1 class="text-3xl font-bold text-gray-700">Football Competition Analysis Tool</h1>
+        <header class="mb-5 flex items-center justify-between flex-wrap gap-2">
+            <h1 class="text-2xl font-bold text-gray-800 tracking-tight">Football Competition Analysis Tool</h1>
             <div class="flex items-center gap-2">
-                <span class="text-sm text-gray-500" id="langLabel">Language:</span>
-                <button id="langToggleBtn" class="px-3 py-1 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">🌐 EN / SR</button>
+                <span class="text-xs text-gray-400 font-medium" id="langLabel">Language</span>
+                <button id="langToggleBtn"
+                    class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition text-sm"
+                    title="Current language: EN. Click to switch.">
+                    <span class="lang-pill lang-pill-active" data-lang="en">EN</span>
+                    <span class="text-gray-300 text-xs leading-none">/</span>
+                    <span class="lang-pill lang-pill-inactive" data-lang="sr">SR</span>
+                </button>
             </div>
         </header>
 
-        <div class="flex flex-wrap mb-0 gap-0">
-            <button class="tab-button active" onclick="openTab(event, 'simulatorTab')">Group Simulator</button>
-            <button class="tab-button" onclick="openTab(event, 'oddsCalculatorTab')">Simulated Group Odds</button>
-            <button class="tab-button" onclick="openTab(event, 'tournamentTeamOddsTab')">Tournament Team Odds</button>
-            <button class="tab-button" onclick="openTab(event, 'multiGroupViewTab')">Multi-Group View</button>
-        </div>
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-button active" data-tab="simulatorTab">Group Simulator</button>
+            <button class="tab-button" data-tab="lambdaViewTab">Lambdas</button>
+            <button class="tab-button" data-tab="oddsCalculatorTab">Simulated Group Odds</button>
+            <button class="tab-button" data-tab="tournamentTeamOddsTab">Tournament Team Odds</button>
+            <button class="tab-button" data-tab="multiGroupViewTab">Multi-Group View</button>
+        </nav>
 
         <!-- ===== TAB 1: Group Simulator ===== -->
         <div id="simulatorTab" class="tab-content active">
-            <p class="text-gray-600 mb-4 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
-            <div class="mb-6">
+            <p class="text-gray-500 mb-5 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
+
+            <!-- Input Mode -->
+            <div class="mb-5">
                 <label for="inputMode" class="block text-sm font-medium text-gray-700 mb-1">Simulation Input Mode:</label>
-                <select id="inputMode" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <select id="inputMode" class="w-full md:w-2/3 p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                     <option value="odds">Match odds input (existing mode)</option>
                     <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
                     <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
                 </select>
                 <p class="mt-1 text-xs text-gray-500">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
-                <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900">
+            </div>
+
+            <!-- Match Data Section (visible in odds + hybrid modes) -->
+            <div id="matchDataSection" class="mb-5">
+                <div class="mb-4">
+                    <label for="csvFileInput" class="file-input-button">Import CSV File</label>
+                    <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
+                    <span id="csvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
+                    <p class="mt-1.5 text-xs text-gray-500">
+                        CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>
+                        Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
+                        Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
+                        If team names contain the delimiter, quote them (e.g., "Team, Inc.").<br/>
+                        In <strong>Hybrid</strong> mode, paste only matches with known odds here.
+                    </p>
+                </div>
+                <div>
+                    <label for="matchData" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
+                    <textarea id="matchData" rows="10" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                </div>
+            </div>
+
+            <!-- Elo Data Section (visible in elo + hybrid modes) -->
+            <div id="eloSection" class="hidden mb-5">
+                <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-900">
                     <p class="font-semibold mb-1">Elo CSV supported format</p>
                     <p>Accepted delimiters: comma, semicolon, or tab.</p>
                     <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
                     <p>Hybrid mode uses your provided odds matches, then fills missing group fixtures from Elo.</p>
-                    <p class="font-semibold mt-2 mb-1">Hybrid input structure (proposed)</p>
-                    <p><strong>1) Match Data (Odds Input):</strong> include only known matches (e.g., Round 1), using the existing odds row format.</p>
-                    <p><strong>2) Elo Data:</strong> include all teams per group using <code>GROUP,TEAM,ELO</code>, so missing pairings can be generated.</p>
-                    <p class="mt-1">Example rows:</p>
-                    <pre class="mt-1 whitespace-pre-wrap">GROUP,TEAM,ELO
+                    <p class="font-semibold mt-2 mb-1">Example rows:</p>
+                    <pre class="whitespace-pre-wrap">GROUP,TEAM,ELO
 A,Germany,1942
 A,Scotland,1730
 B,Spain,2036</pre>
                 </div>
-            </div>
-            <div class="mb-4">
-                <label for="csvFileInput" class="file-input-button">Import CSV File</label>
-                <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
-                <span id="csvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                <p class="mt-1 text-xs text-gray-500">
-                    CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>
-                    Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
-                    Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5 (TEAM_A/B are single fields)<br/>
-                    If team names contain the delimiter, quote them in the CSV (e.g., "Team, Inc.").<br/>
-                    In <strong>Hybrid</strong> mode, paste only matches with known odds here.
-                </p>
-            </div>
-            <div class="mb-6">
-                <label for="matchData" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
-                <textarea id="matchData" rows="10" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
-            </div>
-            <div class="mb-6">
                 <label for="eloCsvFileInput" class="file-input-button">Import Elo CSV</label>
                 <input type="file" id="eloCsvFileInput" class="hidden-file-input" accept=".csv">
                 <span id="eloCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                <p class="mt-1 text-xs text-gray-500">
-                    Elo CSV format: GROUP,TEAM,ELO (or ELO_RATING header; header row optional).<br/>
-                    Example:<br/>
-                    A,Germany,1942<br/>
-                    A,Scotland,1730<br/>
-                    Delimiters supported: comma, semicolon, tab.<br/>
+                <p class="mt-1.5 text-xs text-gray-500">
+                    Format: GROUP,TEAM,ELO (header optional). Delimiters: comma, semicolon, tab.<br/>
                     In <strong>Hybrid</strong> mode, include all teams for each group here.
                 </p>
                 <label for="eloData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Elo Data:</label>
-                <textarea id="eloData" rows="8" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
+                <textarea id="eloData" rows="8" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
             </div>
-            <div class="mb-6">
-                <label for="bracketCsvFileInput" class="file-input-button">Import Bracket CSV (Optional)</label>
-                <input type="file" id="bracketCsvFileInput" class="hidden-file-input" accept=".csv">
-                <span id="bracketCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                <p class="mt-1 text-xs text-gray-500">
-                    Use this for knockout path definitions (R32, R16, QF, SF, 3RD, FINAL).<br/>
-                    Format: ROUND,MATCH,TEAM_REF_A,vs,TEAM_REF_B (header optional).
-                </p>
-                <label for="bracketData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Bracket Data:</label>
-                <textarea id="bracketData" rows="8" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste bracket rows here for future knockout simulation."></textarea>
-            </div>
-            <div class="mb-6">
-                <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
-                <input type="number" id="numSimulations" value="10000" class="w-full md:w-1/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div class="mb-6">
-                <label for="tieBreakPreset" class="block text-sm font-medium text-gray-700 mb-1">Standings Tie-Break Rules:</label>
-                <select id="tieBreakPreset" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></select>
-                <p id="tieBreakPresetHelp" class="mt-1 text-xs text-gray-500"></p>
-            </div>
-            <div class="mb-6">
-                <label for="advancementPreset" class="block text-sm font-medium text-gray-700 mb-1">Advancement Logic:</label>
-                <select id="advancementPreset" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></select>
-                <p id="advancementPresetHelp" class="mt-1 text-xs text-gray-500"></p>
+
+            <!-- Bracket Data Section (always collapsible) -->
+            <details class="collapsible-section" id="bracketSection">
+                <summary>Bracket Data <span class="text-xs font-normal text-gray-400 ml-1">(optional — knockout path definitions)</span></summary>
+                <div class="section-body">
+                    <label for="bracketCsvFileInput" class="file-input-button">Import Bracket CSV</label>
+                    <input type="file" id="bracketCsvFileInput" class="hidden-file-input" accept=".csv">
+                    <span id="bracketCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
+                    <p class="mt-1.5 text-xs text-gray-500">
+                        Use this for knockout path definitions (R32, R16, QF, SF, 3RD, FINAL).<br/>
+                        Format: ROUND,MATCH,TEAM_REF_A,vs,TEAM_REF_B (header optional).
+                    </p>
+                    <label for="bracketData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Bracket Data:</label>
+                    <textarea id="bracketData" rows="8" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste bracket rows here for knockout simulation."></textarea>
+                </div>
+            </details>
+
+            <!-- Simulation Settings -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <div>
+                    <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
+                    <input type="number" id="numSimulations" value="10000" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label for="tieBreakPreset" class="block text-sm font-medium text-gray-700 mb-1">Standings Tie-Break Rules:</label>
+                    <select id="tieBreakPreset" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                    <p id="tieBreakPresetHelp" class="mt-1 text-xs text-gray-400"></p>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="advancementPreset" class="block text-sm font-medium text-gray-700 mb-1">Advancement Logic:</label>
+                    <select id="advancementPreset" class="w-full md:w-2/3 p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                    <p id="advancementPresetHelp" class="mt-1 text-xs text-gray-400"></p>
+                </div>
             </div>
 
             <!-- Scenario Locking Section (shown after parsing) -->
-            <div id="scenarioLockSection" class="hidden mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <h3 class="text-base font-semibold text-amber-800 mb-2">🔒 Scenario Locking <span class="text-xs font-normal text-amber-600">(fix a match result before re-running simulation)</span></h3>
+            <div id="scenarioLockSection" class="hidden mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <h3 class="text-sm font-semibold text-amber-800 mb-1.5">Scenario Locking <span class="text-xs font-normal text-amber-600 ml-1">(fix a match result before re-running simulation)</span></h3>
                 <p class="text-xs text-amber-700 mb-3">Lock one or more match outcomes. Locked matches use conditional Poisson simulation matching the chosen result. Useful for live betting analysis.</p>
                 <div id="scenarioLockTableContainer" class="overflow-x-auto">
                     <table class="min-w-full text-xs border-collapse">
                         <thead>
                             <tr class="bg-amber-100">
-                                <th class="px-3 py-2 text-left text-amber-700">Group</th>
-                                <th class="px-3 py-2 text-left text-amber-700">Match</th>
-                                <th class="px-3 py-2 text-left text-amber-700">Lock Result</th>
+                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Group</th>
+                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Match</th>
+                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Lock Result</th>
                             </tr>
                         </thead>
                         <tbody id="scenarioLockTableBody"></tbody>
@@ -127,63 +145,77 @@ B,Spain,2036</pre>
                 <button id="clearLocksBtn" class="mt-3 px-3 py-1 text-xs bg-amber-200 hover:bg-amber-300 text-amber-900 font-medium rounded transition">Clear All Locks</button>
             </div>
 
-            <div class="flex flex-col sm:flex-row gap-4 mb-6">
-                <button id="parseButton" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">1. Parse &amp; Validate Data</button>
-                <button id="runButton" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>2. Run Simulation</button>
-                <button id="clearButton" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Clear All</button>
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row items-center gap-3 mb-5">
+                <button id="parseButton" class="flex-1 w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Parse &amp; Validate Data</button>
+                <button id="runButton" class="flex-1 w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Run Simulation</button>
+                <button id="clearButton" class="font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out text-sm">Clear All</button>
             </div>
-            <div id="statusArea" class="mb-4 text-sm text-gray-600"></div>
+
+            <div id="statusArea" class="mb-3"></div>
             <div id="loader" class="loader hidden"></div>
 
             <!-- Export Raw Data button (shown after simulation) -->
-            <div id="exportRawDataSection" class="hidden mb-4">
-                <button id="exportRawDataBtn" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out text-sm">⬇ Export Raw Simulation Data (CSV)</button>
-                <span class="ml-2 text-xs text-gray-500">Exports per-simulation team stats for custom Excel analysis.</span>
+            <div id="exportRawDataSection" class="hidden mb-4 flex items-center gap-2 flex-wrap">
+                <button id="exportRawDataBtn" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-1.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">⬇ Export Raw Simulation Data (CSV)</button>
+                <span class="text-xs text-gray-400">Exports per-simulation team stats for custom Excel analysis.</span>
+                <span id="exportRawDataError" class="inline-error"></span>
             </div>
 
-            <div id="resultsArea" class="bg-gray-50 p-4 rounded-md shadow-inner max-h-[70vh] overflow-y-auto">
-                <h2 class="text-xl font-semibold text-gray-700 mb-3">Simulation Results:</h2>
-                <div id="resultsContent" class="text-sm"> Results will appear here... </div>
+            <!-- Results Area (no max-height clamp) -->
+            <div id="resultsArea" class="bg-gray-50 p-4 rounded-md shadow-inner">
+                <h2 class="text-lg font-semibold text-gray-700 mb-3">Simulation Results</h2>
+                <div id="resultsContent" class="text-sm text-gray-400">Results will appear here...</div>
             </div>
         </div>
 
-        <!-- ===== TAB 2: Simulated Group Odds ===== -->
+        <!-- ===== TAB 2: Lambda View ===== -->
+        <div id="lambdaViewTab" class="tab-content">
+            <h2 class="text-xl font-semibold text-gray-700 mb-1">Parsed Lambdas</h2>
+            <p class="text-gray-500 mb-5 text-sm">Inspect the implied expected goals from the current parsed input before running tournament simulations.</p>
+            <div id="lambdaViewContent" class="bg-gray-50 p-4 rounded-md shadow-inner text-sm text-gray-400">
+                Parse data first to inspect team and match lambdas.
+            </div>
+        </div>
+
+        <!-- ===== TAB 3: Simulated Group Odds ===== -->
         <div id="oddsCalculatorTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-3">Simulated Group Odds</h2>
-            <p class="text-gray-600 mb-4 text-sm">View odds derived from the simulation results. Select a group and apply a margin.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-1">Simulated Group Odds</h2>
+            <p class="text-gray-500 mb-5 text-sm">View odds derived from the simulation results. Select a group and apply a margin.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                 <div>
                     <label for="simGroupSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Group:</label>
-                    <select id="simGroupSelect" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select id="simGroupSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                         <option value="">-- Run Simulation First --</option>
                     </select>
                 </div>
                 <div>
                     <label for="simBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Main Bookmaker Margin (%):</label>
-                    <input type="number" id="simBookieMargin" step="0.1" min="0" value="5" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5 for 5%">
+                    <input type="number" id="simBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="e.g., 5 for 5%">
                 </div>
             </div>
-            <div class="flex gap-4 mb-4">
-                <button id="showSimulatedOddsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Show/Refresh Market Odds</button>
-                <button id="generateGroupCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-md shadow-md transition duration-150 ease-in-out" disabled>Generate Group Odds CSV</button>
+            <div class="flex flex-wrap gap-3 mb-4 items-center">
+                <button id="showSimulatedOddsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show / Refresh Market Odds</button>
+                <button id="generateGroupCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Generate Group Odds CSV</button>
+                <span id="generateGroupCsvError" class="inline-error"></span>
             </div>
             <div id="simulatedOddsStatus" class="text-sm text-red-500 mb-4"></div>
 
-            <div id="calculatedOddsResultContainer" class="mt-2 p-1 bg-gray-50 rounded-md shadow-inner max-h-[60vh] overflow-y-auto mb-6">
-                <div id="calculatedOddsResultContent" class="text-sm"> Select a group and click "Show/Refresh Market Odds" to see standard market results. </div>
+            <div id="calculatedOddsResultContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner mb-6">
+                <div id="calculatedOddsResultContent" class="text-sm text-gray-400">Select a group and click "Show / Refresh Market Odds" to see results.</div>
             </div>
 
-            <hr class="my-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-3">Over/Under Line Odds</h3>
+            <hr class="my-6 border-gray-200">
+            <h3 class="text-base font-semibold text-gray-700 mb-3">Over/Under Line Odds</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label for="ouBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Over/Under Specific Margin (%):</label>
-                    <input type="number" id="ouBookieMargin" step="0.1" min="0" value="5" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5 for 5%">
+                    <input type="number" id="ouBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="e.g., 5 for 5%">
                 </div>
                 <div>
                     <label for="customOULines" class="block text-sm font-medium text-gray-700 mb-1">Custom O/U Lines (comma-separated, blank = auto):</label>
-                    <input type="text" id="customOULines" placeholder="e.g. 1.5, 2.5, 3.5, 4.5" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                    <p class="mt-1 text-xs text-gray-500">Overrides auto-computed lines for all O/U markets on this tab.</p>
+                    <input type="text" id="customOULines" placeholder="e.g. 1.5, 2.5, 3.5, 4.5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                    <p class="mt-1 text-xs text-gray-400">Overrides auto-computed lines for all O/U markets on this tab.</p>
                 </div>
             </div>
             <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -209,81 +241,87 @@ B,Spain,2036</pre>
                 </div>
             </div>
 
-            <hr class="my-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-3">Custom Team Prop Odds</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+            <hr class="my-6 border-gray-200">
+            <h3 class="text-base font-semibold text-gray-700 mb-3">Custom Team Prop Odds</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
                 <div>
                     <label for="simTeamSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Team (from chosen group):</label>
-                    <select id="simTeamSelect" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" disabled>
+                    <select id="simTeamSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" disabled>
                         <option value="">-- Select Group First --</option>
                     </select>
                 </div>
-                <div>
-                    <button id="generateTeamCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out mt-6" disabled>Generate Team CSV</button>
+                <div class="flex flex-col justify-end gap-1">
+                    <button id="generateTeamCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Generate Team CSV</button>
+                    <span id="generateTeamCsvError" class="inline-error"></span>
                 </div>
             </div>
             <div id="customProbInputsContainer" class="hidden">
                 <div class="flex flex-wrap items-center gap-2 text-sm mb-4 p-3 bg-indigo-50 rounded-md">
                     <span class="font-medium">Calculate P(</span>
-                    <select id="simCustomStatType" class="p-1 border rounded text-xs">
+                    <select id="simCustomStatType" class="p-1.5 border rounded text-xs">
                         <option value="ptsSims">Points</option>
                         <option value="winsSims">Wins</option>
                         <option value="gfSims">GF</option>
                         <option value="gaSims">GA</option>
                     </select>
-                    <select id="simCustomOperator" class="p-1 border rounded text-xs">
-                        <option value=">">&gt;</option><option value=">=">&ge;</option><option value="<">&lt;</option><option value="<=">&le;</option><option value="==">==</option><option value="between">Between</option>
+                    <select id="simCustomOperator" class="p-1.5 border rounded text-xs">
+                        <option value=">">&gt;</option>
+                        <option value=">=">&ge;</option>
+                        <option value="<">&lt;</option>
+                        <option value="<=">&le;</option>
+                        <option value="==">==</option>
+                        <option value="between">Between</option>
                     </select>
-                    <input type="number" step="0.1" id="simCustomValue1" class="p-1 border rounded w-20 text-xs" placeholder="Value 1">
-                    <input type="number" step="0.1" id="simCustomValue2" class="p-1 border rounded w-20 text-xs hidden" placeholder="Value 2">
+                    <input type="number" step="0.1" id="simCustomValue1" class="p-1.5 border rounded w-20 text-xs" placeholder="Value 1">
+                    <input type="number" step="0.1" id="simCustomValue2" class="p-1.5 border rounded w-20 text-xs hidden" placeholder="Value 2">
                     <span class="font-medium">)</span>
-                    <button id="calculateCustomProbAndOddButton" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-xs font-semibold">Calc Prop Odd</button>
+                    <button id="calculateCustomProbAndOddButton" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold">Calc Prop Odd</button>
                 </div>
-                <div id="customProbAndOddResultArea" class="text-sm p-3 bg-gray-100 rounded-md"> Custom prop odds will appear here... </div>
+                <div id="customProbAndOddResultArea" class="text-sm p-3 bg-gray-100 rounded-md text-gray-400">Custom prop odds will appear here...</div>
             </div>
         </div>
 
-        <!-- ===== TAB 3: Tournament Team Odds ===== -->
+        <!-- ===== TAB 4: Tournament Team Odds ===== -->
         <div id="tournamentTeamOddsTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-3">Tournament Team Odds</h2>
-            <p class="text-gray-600 mb-4 text-sm">Tournament winner odds across all teams (with total margin) plus optional team-level knockout and totals markets.</p>
+            <h2 class="text-xl font-semibold text-gray-700 mb-1">Tournament Team Odds</h2>
+            <p class="text-gray-500 mb-5 text-sm">Tournament winner odds across all teams (with total margin) plus optional team-level knockout and totals markets.</p>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label for="tournamentTeamSelect" class="block text-sm font-medium text-gray-700 mb-1">Team:</label>
-                    <select id="tournamentTeamSelect" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select id="tournamentTeamSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                         <option value="">-- Run Simulation First --</option>
                     </select>
                 </div>
                 <div>
                     <label for="tournamentBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Bookmaker Margin (%):</label>
-                    <input type="number" id="tournamentBookieMargin" step="0.1" min="0" value="5" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <input type="number" id="tournamentBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                 </div>
                 <div class="flex items-end">
-                    <button id="showTournamentTeamOddsButton" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Show Tournament Odds</button>
+                    <button id="showTournamentTeamOddsButton" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show Tournament Odds</button>
                 </div>
             </div>
             <div id="tournamentTeamOddsStatus" class="text-sm text-red-500 mb-4"></div>
-            <div id="tournamentTeamOddsResultContainer" class="mt-2 p-1 bg-gray-50 rounded-md shadow-inner max-h-[60vh] overflow-y-auto">
-                <div id="tournamentTeamOddsResultContent" class="text-sm">Click "Show Tournament Odds" to view winner market odds and margin.</div>
+            <div id="tournamentTeamOddsResultContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner">
+                <div id="tournamentTeamOddsResultContent" class="text-sm text-gray-400">Click "Show Tournament Odds" to view winner market odds and margin.</div>
             </div>
         </div>
 
-        <!-- ===== TAB 4: Multi-Group View ===== -->
+        <!-- ===== TAB 5: Multi-Group View ===== -->
         <div id="multiGroupViewTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-3">Multi-Group Tournament View</h2>
-            <p class="text-gray-600 mb-4 text-sm">All groups at a glance — advancement probabilities for every team across the tournament simultaneously.</p>
+            <h2 class="text-xl font-semibold text-gray-700 mb-1">Multi-Group Tournament View</h2>
+            <p class="text-gray-500 mb-5 text-sm">All groups at a glance — advancement probabilities for every team across the tournament simultaneously.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label for="multiGroupMargin" class="block text-sm font-medium text-gray-700 mb-1">Bookmaker Margin (%):</label>
-                    <input type="number" id="multiGroupMargin" step="0.1" min="0" value="5" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <input type="number" id="multiGroupMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                 </div>
                 <div class="flex items-end">
-                    <button id="showMultiGroupViewBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out">Show Multi-Group Overview</button>
+                    <button id="showMultiGroupViewBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show Multi-Group Overview</button>
                 </div>
             </div>
             <div id="multiGroupViewStatus" class="text-sm text-red-500 mb-4"></div>
-            <div id="multiGroupViewContainer" class="mt-2 p-1 bg-gray-50 rounded-md shadow-inner max-h-[70vh] overflow-y-auto">
-                <div id="multiGroupViewContent" class="text-sm">Run simulation first, then click "Show Multi-Group Overview".</div>
+            <div id="multiGroupViewContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner">
+                <div id="multiGroupViewContent" class="text-sm text-gray-400">Run simulation first, then click "Show Multi-Group Overview".</div>
             </div>
         </div>
     </div>
