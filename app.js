@@ -315,6 +315,21 @@
             return null;
         }
 
+        function normalizePastedLineBreaks(raw) {
+            return raw.replace(/\\r\\n|\\n|\\r/g, '\n');
+        }
+
+        function isLikelyOddsHeader(parts) {
+            const normalized = parts.map(p => String(p).trim().toUpperCase());
+            return normalized.length >= 8
+                && normalized[0] === 'GROUP'
+                && normalized.includes('TEAM_A')
+                && normalized.includes('TEAM_B')
+                && normalized.includes('ODD1')
+                && normalized.includes('ODDX')
+                && normalized.includes('ODD2');
+        }
+
         function getCsvExportDateTime() {
             const now = new Date();
             const date = `${now.getUTCDate()}.${now.getUTCMonth() + 1}.${now.getUTCFullYear()}`;
@@ -374,9 +389,9 @@
         }
 
         function parseOddsInputData() {
-            const data = matchDataEl.value.trim();
+            const data = normalizePastedLineBreaks(matchDataEl.value.trim());
             if (!data) return { errors: ['Error: Match data empty.'] };
-            const lines = data.split('\n');
+            const lines = data.split(/\r?\n/);
             parsedMatches = [];
             allTeams.clear();
             groupedMatches = {};
@@ -389,6 +404,7 @@
                 const isCsvLike = Array.isArray(delimitedParts);
                 let parts = isCsvLike ? delimitedParts : line.split(/\s+/).map(p => p.trim());
                 parts = parts.filter(p => p.length > 0);
+                if (index === 0 && isCsvLike && isLikelyOddsHeader(parts)) return;
                 let group, team1Name, team2Name, oddsStrings;
                 if (isCsvLike) {
                     const vsIdx = parts.indexOf('vs');
