@@ -1226,7 +1226,9 @@
 
         function populateTournamentTeamSelect() {
             tournamentTeamSelectEl.innerHTML = '<option value="">-- Select Team --</option>';
-            const teams = Object.keys(simulationAggStats?._knockout?.teamProgress || {}).sort((a, b) => a.localeCompare(b));
+            const knockoutTeams = Object.keys(simulationAggStats?._knockout?.teamProgress || {});
+            const groupedTeams = Object.values(groupTeamNames || {}).flat();
+            const teams = [...new Set([...knockoutTeams, ...groupedTeams])].sort((a, b) => a.localeCompare(b));
             if (!teams.length) {
                 tournamentTeamSelectEl.innerHTML = '<option value="">-- Run Sim First --</option>';
                 return;
