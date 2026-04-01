@@ -377,6 +377,13 @@
             return raw.replace(/\\r\\n|\\n|\\r/g, '\n');
         }
 
+        function normalizeEscapedNewlines(raw) {
+            return String(raw || '')
+                .replace(/\\r\\n/g, '\n')
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\n');
+        }
+
         function isLikelyOddsHeader(parts) {
             const normalized = parts.map(p => String(p).trim().toUpperCase());
             return normalized.length >= 8
@@ -522,7 +529,7 @@
         }
 
         function parseEloInputData() {
-            const data = eloDataEl.value.trim();
+            const data = normalizeEscapedNewlines(eloDataEl.value).trim();
             if (!data) return { errors: ['Error: Elo data empty.'] };
             const lines = data.split('\n');
             parsedMatches = [];
@@ -581,7 +588,7 @@
         }
 
         function parseTeamEloRatingsData() {
-            const data = eloDataEl.value.trim();
+            const data = normalizeEscapedNewlines(eloDataEl.value).trim();
             const errors = [];
             const warnings = [];
             const eloMap = {};
@@ -1383,15 +1390,7 @@ B Croatia vs Albania 1.50 4.00 7.50 1.80 2.00
 B Spain vs Italy 2.20 3.20 3.60 1.65 2.20
 B Albania vs Spain 10.00 5.50 1.30 2.00 1.80
 B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
-        eloDataEl.value = `GROUP,TEAM,ELO
-A,Germany,1942
-A,Scotland,1730
-A,Hungary,1767
-A,Switzerland,1840
-B,Spain,2036
-B,Croatia,1854
-B,Italy,1898
-B,Albania,1610`;
+        eloDataEl.value = ``;
 
         window.openTab = openTab; 
         populateTieBreakPresets();
