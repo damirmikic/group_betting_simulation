@@ -17,7 +17,7 @@
         document.addEventListener('DOMContentLoaded', () => { document.querySelector('.tab-button').click(); });
 
         // --- Global Variables ---
-        let parsedMatches = [], allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
+        let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
 
         // --- DOM Elements ---
         const matchDataEl = document.getElementById('matchData'), numSimulationsEl = document.getElementById('numSimulations');
@@ -26,6 +26,8 @@
         const csvFileInputEl = document.getElementById('csvFileInput'), csvFileNameEl = document.getElementById('csvFileName');
         const eloCsvFileInputEl = document.getElementById('eloCsvFileInput'), eloCsvFileNameEl = document.getElementById('eloCsvFileName');
         const eloDataEl = document.getElementById('eloData'), inputModeEl = document.getElementById('inputMode');
+        const bracketCsvFileInputEl = document.getElementById('bracketCsvFileInput'), bracketCsvFileNameEl = document.getElementById('bracketCsvFileName');
+        const bracketDataEl = document.getElementById('bracketData');
         const simGroupSelectEl = document.getElementById('simGroupSelect'), simBookieMarginEl = document.getElementById('simBookieMargin');
         const showSimulatedOddsButtonEl = document.getElementById('showSimulatedOddsButton');
         const calculatedOddsResultContentEl = document.getElementById('calculatedOddsResultContent'), simulatedOddsStatusEl = document.getElementById('simulatedOddsStatus');
@@ -39,6 +41,8 @@
         const generateGroupCsvButtonEl = document.getElementById('generateGroupCsvButton');
         const tieBreakPresetEl = document.getElementById('tieBreakPreset');
         const tieBreakPresetHelpEl = document.getElementById('tieBreakPresetHelp');
+        const advancementPresetEl = document.getElementById('advancementPreset');
+        const advancementPresetHelpEl = document.getElementById('advancementPresetHelp');
 
         const tieBreakRulePresets = {
             uefa_competition: {
@@ -68,6 +72,27 @@
             }
         };
 
+        const advancementRulePresets = {
+            top2_only: {
+                label: "Top 2 only",
+                description: "Top 2 teams per group qualify. No best-third ranking is used.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 0
+            },
+            top2_plus_best4_thirds: {
+                label: "Top 2 + best 4 third-placed",
+                description: "Top 2 qualify directly, plus 4 best 3rd-placed teams across groups.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 4
+            },
+            top2_plus_best8_thirds: {
+                label: "Top 2 + best 8 third-placed",
+                description: "Top 2 qualify directly, plus 8 best 3rd-placed teams across groups.",
+                autoQualifiersPerGroup: 2,
+                bestThirdSlots: 8
+            }
+        };
+
         function populateTieBreakPresets() {
             tieBreakPresetEl.innerHTML = '';
             Object.entries(tieBreakRulePresets).forEach(([key, preset]) => {
@@ -85,6 +110,28 @@
             tieBreakPresetHelpEl.textContent = preset ? preset.description : '';
         }
         tieBreakPresetEl.addEventListener('change', updateTieBreakPresetDescription);
+
+        function populateAdvancementPresets() {
+            advancementPresetEl.innerHTML = '';
+            Object.entries(advancementRulePresets).forEach(([key, preset]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = preset.label;
+                advancementPresetEl.appendChild(option);
+            });
+            advancementPresetEl.value = 'top2_plus_best8_thirds';
+            updateAdvancementPresetDescription();
+        }
+
+        function updateAdvancementPresetDescription() {
+            const preset = advancementRulePresets[advancementPresetEl.value];
+            advancementPresetHelpEl.textContent = preset ? preset.description : '';
+        }
+        advancementPresetEl.addEventListener('change', updateAdvancementPresetDescription);
+
+        function getSelectedAdvancementPreset() {
+            return advancementRulePresets[advancementPresetEl.value] || advancementRulePresets.top2_plus_best8_thirds;
+        }
 
 
         // --- CSV File Input ---
@@ -108,6 +155,17 @@
                 reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading Elo file: ${e.target.error.name}</p>`; eloCsvFileNameEl.textContent = "No file selected."; };
                 reader.readAsText(file);
             } else { eloCsvFileNameEl.textContent = "No file selected."; }
+        });
+
+        bracketCsvFileInputEl.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                bracketCsvFileNameEl.textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = (e) => { bracketDataEl.value = e.target.result; statusAreaEl.innerHTML = `<p class="text-blue-500">Bracket CSV loaded. Click "Parse & Validate Data".</p>`; };
+                reader.onerror = (e) => { statusAreaEl.innerHTML = `<p class="text-red-500">Error reading bracket file: ${e.target.error.name}</p>`; bracketCsvFileNameEl.textContent = "No file selected."; };
+                reader.readAsText(file);
+            } else { bracketCsvFileNameEl.textContent = "No file selected."; }
         });
 
         function updateInputModeUi() {
@@ -522,6 +580,73 @@
             return { errors, warnings };
         }
 
+        function parseTeamEloRatingsData() {
+            const data = eloDataEl.value.trim();
+            const errors = [];
+            const warnings = [];
+            const eloMap = {};
+            if (!data) return { errors: ['Error: Elo data empty.'], warnings, eloMap };
+
+            const lines = data.split('\n');
+            lines.forEach((rawLine, index) => {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('#')) return;
+                const parts = getDelimitedParts(line) || line.split(/\s+/).map(p => p.trim());
+                if (parts.length < 3) {
+                    errors.push(`L${index+1}: Expected GROUP,TEAM,ELO. Got "${rawLine}"`);
+                    return;
+                }
+                const group = (parts[0] || '').trim();
+                const team = (parts[1] || '').trim();
+                const elo = parseFloat(parts[2]);
+                const maybeHeader = group.toLowerCase() === 'group' && team.toLowerCase() === 'team' && Number.isNaN(elo);
+                if (maybeHeader) return;
+                if (!team || Number.isNaN(elo)) {
+                    errors.push(`L${index+1}: Invalid TEAM/ELO. Got "${rawLine}"`);
+                    return;
+                }
+                if (eloMap[team] !== undefined) warnings.push(`L${index+1}: Duplicate Elo for ${team}. Last value used.`);
+                eloMap[team] = elo;
+            });
+
+            return { errors, warnings, eloMap };
+        }
+
+        function getKnockoutLambdasFromElo(teamA, teamB) {
+            const eloA = teamEloRatings[teamA] ?? 1500;
+            const eloB = teamEloRatings[teamB] ?? 1500;
+            const diffAbs = Math.abs(eloA - eloB);
+            const pANoDraw = eloProbNoDraw(eloA, eloB);
+            const pDraw = clamp(0.22 + 0.10 * Math.exp(-diffAbs / 260), 0.18, 0.33);
+            const pA = (1 - pDraw) * pANoDraw;
+            const pB = (1 - pDraw) * (1 - pANoDraw);
+            const totalGoals = 2.25 + Math.min(0.35, diffAbs / 1000);
+            const strengthA = pA + 0.5 * pDraw;
+            const strengthB = pB + 0.5 * pDraw;
+            return {
+                lambdaA: Math.max(0.05, totalGoals * (strengthA / (strengthA + strengthB))),
+                lambdaB: Math.max(0.05, totalGoals * (strengthB / (strengthA + strengthB))),
+                eloA, eloB
+            };
+        }
+
+        function simulateKnockoutMatch(teamA, teamB) {
+            const { lambdaA, lambdaB, eloA, eloB } = getKnockoutLambdasFromElo(teamA, teamB);
+            const gA90 = poissonRandom(lambdaA);
+            const gB90 = poissonRandom(lambdaB);
+            if (gA90 !== gB90) {
+                return { winner: gA90 > gB90 ? teamA : teamB, loser: gA90 > gB90 ? teamB : teamA };
+            }
+            const gAET = poissonRandom(lambdaA / 3);
+            const gBET = poissonRandom(lambdaB / 3);
+            if (gAET !== gBET) {
+                return { winner: gAET > gBET ? teamA : teamB, loser: gAET > gBET ? teamB : teamA };
+            }
+            const penAProb = eloProbNoDraw(eloA, eloB);
+            const aWinsPens = Math.random() < penAProb;
+            return { winner: aWinsPens ? teamA : teamB, loser: aWinsPens ? teamB : teamA };
+        }
+
         function parseHybridInputData() {
             const oddsResult = parseOddsInputData();
             const oddsState = captureCurrentParsedState();
@@ -589,17 +714,96 @@
             return { errors, warnings };
         }
 
+        function isLikelyBracketHeader(parts) {
+            const normalized = parts.map(p => String(p).trim().toUpperCase());
+            return normalized.length >= 4
+                && normalized[0] === 'ROUND'
+                && normalized[1] === 'MATCH';
+        }
+
+        function parseBracketInputData() {
+            const data = normalizePastedLineBreaks(bracketDataEl.value.trim());
+            parsedBracketMatches = [];
+            if (!data) return { errors: [], warnings: [] };
+
+            const lines = data.split(/\r?\n/);
+            const errors = [];
+            const warnings = [];
+            const allowedRounds = new Set(['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL']);
+            const seenMatchIds = new Set();
+
+            lines.forEach((rawLine, index) => {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('#')) return;
+
+                const parts = (getDelimitedParts(line) || line.split(/\s+/).map(p => p.trim())).filter(Boolean);
+                if (index === 0 && isLikelyBracketHeader(parts)) return;
+
+                let round, matchIdRaw, sideA, sideB;
+                const vsIdx = parts.indexOf('vs');
+                if (vsIdx !== -1) {
+                    if (parts.length < 5 || vsIdx < 2 || vsIdx >= parts.length - 1) {
+                        errors.push(`Bracket L${index + 1}: Invalid 'vs' placement. Got "${rawLine}"`);
+                        return;
+                    }
+                    round = parts[0];
+                    matchIdRaw = parts[1];
+                    sideA = parts.slice(2, vsIdx).join(' ');
+                    sideB = parts.slice(vsIdx + 1).join(' ');
+                } else {
+                    if (parts.length < 4) {
+                        errors.push(`Bracket L${index + 1}: Expected ROUND,MATCH,SIDE_A,SIDE_B (or with 'vs').`);
+                        return;
+                    }
+                    round = parts[0];
+                    matchIdRaw = parts[1];
+                    sideA = parts[2];
+                    sideB = parts.slice(3).join(' ');
+                }
+
+                if (!allowedRounds.has(String(round).toUpperCase())) warnings.push(`Bracket L${index + 1}: Unknown round "${round}".`);
+                if (!sideA || !sideB) {
+                    errors.push(`Bracket L${index + 1}: Empty side reference.`);
+                    return;
+                }
+
+                const matchNum = parseInt(String(matchIdRaw).replace(/[^\d]/g, ''), 10);
+                if (Number.isNaN(matchNum)) {
+                    errors.push(`Bracket L${index + 1}: Could not parse match number from "${matchIdRaw}".`);
+                    return;
+                }
+                if (seenMatchIds.has(matchNum)) warnings.push(`Bracket L${index + 1}: Duplicate match number ${matchNum}; keeping both entries.`);
+                seenMatchIds.add(matchNum);
+
+                parsedBracketMatches.push({
+                    lineNum: index + 1,
+                    round: String(round).toUpperCase(),
+                    matchNum,
+                    sideARef: sideA,
+                    sideBRef: sideB
+                });
+            });
+
+            return { errors, warnings };
+        }
+
 
         // --- Parsing Logic (Simulator) ---
         parseButtonEl.addEventListener('click', () => {
             const mode = inputModeEl.value;
-            const { errors, warnings } = mode === 'elo'
+            const coreParsed = mode === 'elo'
                 ? parseEloInputData()
                 : (mode === 'hybrid' ? parseHybridInputData() : parseOddsInputData());
+            const bracketParsed = parseBracketInputData();
+            const shouldParseEloForKnockout = parsedBracketMatches.length > 0 || mode === 'elo' || mode === 'hybrid';
+            const eloParsed = shouldParseEloForKnockout ? parseTeamEloRatingsData() : { errors: [], warnings: [], eloMap: {} };
+            teamEloRatings = shouldParseEloForKnockout && eloParsed.errors.length === 0 ? eloParsed.eloMap : {};
+            const errors = [...coreParsed.errors, ...bracketParsed.errors, ...eloParsed.errors.map(e => `[Elo] ${e}`)];
+            const warnings = [...coreParsed.warnings, ...bracketParsed.warnings, ...eloParsed.warnings.map(w => `[Elo] ${w}`)];
             if (errors.length > 0) { statusAreaEl.innerHTML = `<p class="text-red-500 font-semibold">Parse Fail (${errors.length}):</p><ul class="list-disc list-inside text-red-500">${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`; if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`; runButtonEl.disabled = true; }
             else {
                 const modeLabel = mode === 'elo' ? 'Elo-generated fixtures' : (mode === 'hybrid' ? 'hybrid (odds + Elo fill)' : 'odds input');
-                statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${modeLabel}).</p>`;
+                statusAreaEl.innerHTML = `<p class="text-green-500">Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} gr, ${allTeams.size} teams (${modeLabel}).</p><p class="text-blue-600">Bracket rows loaded: ${parsedBracketMatches.length}. Elo ratings loaded: ${Object.keys(teamEloRatings).length} teams.</p>`;
                 if (warnings.length > 0) statusAreaEl.innerHTML += `<p class="text-yellow-600 font-semibold mt-2">Warn (${warnings.length}):</p><ul class="list-disc list-inside text-yellow-600">${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`;
                 runButtonEl.disabled = false;
                 resultsContentEl.innerHTML = "Parsed. Ready for sim.";
@@ -638,8 +842,78 @@
             }, 50);
         });
 
+        function initializeKnockoutStats(aggStats) {
+            aggStats._knockout = { teamProgress: {} };
+            Object.values(groupTeamNames).flat().forEach(team => {
+                aggStats._knockout.teamProgress[team] = {
+                    reachR32: 0, reachR16: 0, reachQF: 0, reachSF: 0, reachFINAL: 0, winFINAL: 0
+                };
+            });
+        }
+
+        function incrementRoundReach(aggStats, team, round) {
+            const teamStats = aggStats?._knockout?.teamProgress?.[team];
+            if (!teamStats) return;
+            if (round === 'R32') teamStats.reachR32++;
+            if (round === 'R16') teamStats.reachR16++;
+            if (round === 'QF') teamStats.reachQF++;
+            if (round === 'SF') teamStats.reachSF++;
+            if (round === 'FINAL') teamStats.reachFINAL++;
+        }
+
+        function resolveBracketReference(ref, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers) {
+            const cleaned = String(ref || '').trim();
+            const winnerGroupMatch = cleaned.match(/^Winner Group\s+([A-Za-z0-9]+)$/i);
+            if (winnerGroupMatch) return groupStandings[winnerGroupMatch[1]]?.[0]?.name || null;
+            const runnerUpGroupMatch = cleaned.match(/^Runner-up Group\s+([A-Za-z0-9]+)$/i);
+            if (runnerUpGroupMatch) return groupStandings[runnerUpGroupMatch[1]]?.[1]?.name || null;
+            const thirdGroupMatch = cleaned.match(/^3rd Group\s+(.+)$/i);
+            if (thirdGroupMatch) {
+                const groups = thirdGroupMatch[1].split('/').map(g => g.trim()).filter(Boolean);
+                const pick = thirdRankedList.find(team => groups.includes(team.group) && thirdQualifiedByGroup.has(team.group) && !usedTeams.has(team.name));
+                return pick?.name || null;
+            }
+            const winnerMatchRef = cleaned.match(/^Winner Match\s+(\d+)$/i);
+            if (winnerMatchRef) return knockoutWinners[parseInt(winnerMatchRef[1], 10)] || null;
+            const loserMatchRef = cleaned.match(/^Loser Match\s+(\d+)$/i);
+            if (loserMatchRef) return knockoutLosers[parseInt(loserMatchRef[1], 10)] || null;
+            return cleaned || null;
+        }
+
+        function runKnockoutStage(aggStats, groupStandings, thirdRankedList) {
+            if (!parsedBracketMatches.length) return;
+            const sortedBracketMatches = [...parsedBracketMatches].sort((a, b) => a.matchNum - b.matchNum);
+            const knockoutWinners = {};
+            const knockoutLosers = {};
+            const thirdQualifiedByGroup = new Set(thirdRankedList.map(t => t.group));
+            const usedTeamsInRound = {};
+
+            sortedBracketMatches.forEach(match => {
+                usedTeamsInRound[match.round] = usedTeamsInRound[match.round] || new Set();
+                const usedTeams = usedTeamsInRound[match.round];
+                const teamA = resolveBracketReference(match.sideARef, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers);
+                const teamB = resolveBracketReference(match.sideBRef, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers);
+                if (!teamA || !teamB || teamA === teamB) return;
+
+                usedTeams.add(teamA);
+                usedTeams.add(teamB);
+                incrementRoundReach(aggStats, teamA, match.round);
+                incrementRoundReach(aggStats, teamB, match.round);
+
+                const { winner, loser } = simulateKnockoutMatch(teamA, teamB);
+                knockoutWinners[match.matchNum] = winner;
+                knockoutLosers[match.matchNum] = loser;
+                if (match.round === 'FINAL' && aggStats._knockout?.teamProgress?.[winner]) {
+                    aggStats._knockout.teamProgress[winner].winFINAL++;
+                }
+            });
+        }
+
         function runSimulation(numSims) {
             const aggStats={}; 
+            const advancementPreset = getSelectedAdvancementPreset();
+            const autoQualifiersPerGroup = Math.max(0, advancementPreset.autoQualifiersPerGroup || 0);
+            const bestThirdSlots = Math.max(0, advancementPreset.bestThirdSlots || 0);
             for(const gr in groupedMatches){ 
                 aggStats[gr]={
                     groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, 
@@ -655,8 +929,10 @@
                     };
                 });
             }
+            initializeKnockoutStats(aggStats);
             for(let i=0; i<numSims; i++){ 
                 const thirdPlacedTeams = [];
+                const groupStandings = {};
                 for(const gK in groupedMatches){ 
                     const cGMs=groupedMatches[gK];
                     const tIG=[...(groupTeamNames[gK]||[])]; 
@@ -685,6 +961,7 @@
                         simulatedGroupMatches,
                         tieBreakRulePresets[tieBreakPresetEl.value] || tieBreakRulePresets.uefa_competition
                     );
+                    groupStandings[gK] = rTs;
             
                     let mGF=-1,mGA=-1; 
                     let groupHad9Pts=false, groupHad0Pts=false; 
@@ -716,8 +993,8 @@
                             tA.gaSims.push(t.ga); 
                             if(t.gf===mGF&&mGF>0)tA.mostGFCount++; 
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
-                            if (rI < 2) tA.autoQualifyCount++;
-                            if (rI < 2) tA.advanceToKnockoutCount++;
+                            if (rI < autoQualifiersPerGroup) tA.autoQualifyCount++;
+                            if (rI < autoQualifiersPerGroup) tA.advanceToKnockoutCount++;
                         }
                     });
 
@@ -735,7 +1012,7 @@
                 }
 
                 if (thirdPlacedTeams.length > 0) {
-                    thirdPlacedTeams
+                    const sortedThirds = thirdPlacedTeams
                         .sort((a, b) => {
                             if (a.pts !== b.pts) return b.pts - a.pts;
                             if (a.gd !== b.gd) return b.gd - a.gd;
@@ -744,13 +1021,15 @@
                             if (a.group !== b.group) return a.group.localeCompare(b.group);
                             return a.name.localeCompare(b.name);
                         })
-                        .slice(0, 8)
-                        .forEach(team => {
-                            const tA = aggStats[team.group]?.[team.name];
-                            if (!tA) return;
-                            tA.bestThirdQualifyCount++;
-                            tA.advanceToKnockoutCount++;
-                        });
+                    sortedThirds.slice(0, bestThirdSlots).forEach(team => {
+                        const tA = aggStats[team.group]?.[team.name];
+                        if (!tA) return;
+                        tA.bestThirdQualifyCount++;
+                        tA.advanceToKnockoutCount++;
+                    });
+                    if (Object.keys(teamEloRatings).length > 0 && parsedBracketMatches.length > 0) {
+                        runKnockoutStage(aggStats, groupStandings, sortedThirds.slice(0, bestThirdSlots));
+                    }
                 }
             }
             return aggStats;
@@ -839,6 +1118,7 @@
         function displayResults(aggStats, numSims) {
             let html = ''; const sortedGroupKeys = Object.keys(aggStats).sort();
             for (const groupKey of sortedGroupKeys) {
+                if (groupKey === '_knockout') continue;
                 const groupData = aggStats[groupKey]; if (!groupData) continue;
                 html += `<div class="mb-8 p-4 bg-white border border-gray-200 rounded-lg shadow"><h3 class="text-lg font-semibold text-indigo-600 mb-3">Group ${groupKey}</h3>`;
                 html += `<h4 class="font-medium text-gray-700 mt-4 mb-1">Expected Team Stats:</h4><table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr>${['Team','E(Pts)','E(Wins)','E(GF)','E(GA)','P(Most GF)','P(Most GA)'].map(h=>`<th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
@@ -849,6 +1129,17 @@
                 const allSF=Object.entries(groupData.straightForecasts||{}).sort(([,a],[,b])=>b-a); html+=`<h4 class="font-medium text-gray-700 mt-4 mb-1">All Straight Forecasts (1st-2nd):</h4><ul class="list-disc list-inside text-sm max-h-40 overflow-y-auto">${allSF.map(([k,c])=>`<li>${k}: ${(numSims>0?c/numSims*100:0).toFixed(1)}%</li>`).join('')||'N/A'}</ul>`;
                 const topAD=Object.entries(groupData.advancingDoubles||{}).sort(([,a],[,b])=>b-a).slice(0,10); html+=`<h4 class="font-medium text-gray-700 mt-4 mb-1">Top Advancing Doubles (Top 2 Any Order):</h4><ul class="list-disc list-inside text-sm">${topAD.map(([k,c])=>`<li>${k}: ${(numSims>0?c/numSims*100:0).toFixed(1)}%</li>`).join('')||'N/A'}</ul>`;
                 html += `</div>`;
+            }
+            const knockoutTeams = Object.entries(aggStats?._knockout?.teamProgress || {});
+            if (knockoutTeams.length > 0 && parsedBracketMatches.length > 0) {
+                html += `<div class="mb-8 p-4 bg-white border border-gray-200 rounded-lg shadow"><h3 class="text-lg font-semibold text-rose-600 mb-3">Knockout Progression (Elo-driven)</h3>`;
+                html += `<table class="min-w-full divide-y divide-gray-200 mb-3 text-xs sm:text-sm"><thead class="bg-gray-50"><tr><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">Team</th><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">R16</th><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">QF</th><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">SF</th><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">Final</th><th class="px-2 py-2 text-left font-medium text-gray-500 tracking-wider">Champion</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+                knockoutTeams
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .forEach(([team, stats]) => {
+                        html += `<tr><td class="px-2 py-2 whitespace-nowrap font-medium">${team}</td><td class="px-2 py-2">${(stats.reachR16 / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachQF / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachSF / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2">${(stats.reachFINAL / numSims * 100).toFixed(1)}%</td><td class="px-2 py-2 font-semibold">${(stats.winFINAL / numSims * 100).toFixed(1)}%</td></tr>`;
+                    });
+                html += `</tbody></table></div>`;
             }
             resultsContentEl.innerHTML = html || "<p>No results. Parse & run sim.</p>";
         }
@@ -862,7 +1153,7 @@
             simTeamSelectEl.disabled = true; 
             customProbInputsContainerEl.classList.add('hidden');
             if (Object.keys(simulationAggStats).length > 0) { 
-                Object.keys(simulationAggStats).sort().forEach(groupKey => { 
+                Object.keys(simulationAggStats).filter(groupKey => groupKey !== '_knockout').sort().forEach(groupKey => { 
                     const option = document.createElement('option'); 
                     option.value = groupKey; 
                     option.textContent = `Group ${groupKey}`; 
@@ -909,6 +1200,7 @@
         showSimulatedOddsButtonEl.addEventListener('click', () => { 
             const selectedGroupKey = simGroupSelectEl.value;
             const mainMarginPercent = parseFloat(simBookieMarginEl.value);
+            const advancementPreset = getSelectedAdvancementPreset();
             
             simulatedOddsStatusEl.textContent = ""; 
             calculatedOddsResultContentEl.innerHTML = "";
@@ -937,7 +1229,7 @@
             });
             html+=`</tbody></table>`;
             
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (Top 2 + Best 8 Third-Placed):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (${advancementPreset.label}):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.advanceToKnockoutCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
 
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Team to Score Most Goals:</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Most GF)</th><th>Odd</th></tr></thead><tbody>`;
@@ -1054,10 +1346,12 @@
         clearButtonEl.addEventListener('click', () => {
             matchDataEl.value = ""; numSimulationsEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = "Results will appear here...";
             eloDataEl.value = "";
-            parsedMatches=[]; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
+            bracketDataEl.value = "";
+            parsedMatches=[]; parsedBracketMatches=[]; teamEloRatings={}; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
             runButtonEl.disabled=true; loaderEl.classList.add('hidden'); parseButtonEl.disabled=false;
             csvFileInputEl.value=null; csvFileNameEl.textContent="No file selected.";
             eloCsvFileInputEl.value=null; eloCsvFileNameEl.textContent="No file selected.";
+            bracketCsvFileInputEl.value=null; bracketCsvFileNameEl.textContent="No file selected.";
             populateSimGroupSelect(); 
             calculatedOddsResultContentEl.innerHTML = 'Select a group and click "Show/Refresh Market Odds" to see results.';
             simulatedOddsStatusEl.textContent = "";
@@ -1101,6 +1395,7 @@ B,Albania,1610`;
 
         window.openTab = openTab; 
         populateTieBreakPresets();
+        populateAdvancementPresets();
         updateInputModeUi();
         simCustomOperatorEl.addEventListener('change', () => { 
             if (simCustomOperatorEl.value === 'between') simCustomValue2El.classList.remove('hidden');
@@ -1112,6 +1407,7 @@ B,Albania,1610`;
             const teamName = simTeamSelectEl.value;
             const marginPercent = parseFloat(simBookieMarginEl.value);
             const marginDecimal = marginPercent / 100;
+            const advancementPreset = getSelectedAdvancementPreset();
             
             if (!groupKey || !teamName) {
                 alert("Please select a group and a team first.");
@@ -1139,7 +1435,7 @@ B,Albania,1610`;
 
             const probQualify = (teamData.advanceToKnockoutCount || 0) / currentNumSims;
             const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
-            csvContent += toCsvRow("Prolazi dalje (Top 2 + najboljih 8 treceplasiranih)", oddQualify);
+            csvContent += toCsvRow(`Prolazi dalje (${advancementPreset.label})`, oddQualify);
 
             const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
             const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
@@ -1150,7 +1446,7 @@ B,Albania,1610`;
             csvContent += toCsvRow("3. mesto u grupi", odd3rd);
 
             const probDirectQualify = (teamData.autoQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow("Direktan prolaz (Top 2)", calculateOddWithMargin(probDirectQualify, marginDecimal));
+            csvContent += toCsvRow(`Direktan prolaz (Top ${advancementPreset.autoQualifiersPerGroup})`, calculateOddWithMargin(probDirectQualify, marginDecimal));
 
             const probBestThirdQualify = (teamData.bestThirdQualifyCount || 0) / currentNumSims;
             csvContent += toCsvRow("Prolaz kao najbolja 3.", calculateOddWithMargin(probBestThirdQualify, marginDecimal));
