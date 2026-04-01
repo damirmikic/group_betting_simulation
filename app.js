@@ -1409,29 +1409,57 @@
             tournamentTeamOddsStatusEl.textContent = '';
             tournamentTeamOddsResultContentEl.innerHTML = '';
 
-            if (!team) { tournamentTeamOddsStatusEl.textContent = 'Select a team first.'; return; }
             if (isNaN(marginPercent) || marginPercent < 0) { tournamentTeamOddsStatusEl.textContent = 'Enter a valid non-negative margin.'; return; }
             if (currentNumSims === 0) { tournamentTeamOddsStatusEl.textContent = 'Run simulation first.'; return; }
 
-            const stats = simulationAggStats?._knockout?.teamProgress?.[team];
-            if (!stats) { tournamentTeamOddsStatusEl.textContent = 'No knockout/tournament stats available for this team.'; return; }
-
             const marginDecimal = marginPercent / 100;
+
+            const teamProgress = simulationAggStats?._knockout?.teamProgress || {};
+            const allTeamsWithKnockoutData = Object.keys(teamProgress).sort((a, b) => a.localeCompare(b));
+            if (allTeamsWithKnockoutData.length === 0) {
+                tournamentTeamOddsStatusEl.textContent = 'No knockout/tournament stats available.';
+                return;
+            }
+
+            const winnerSelections = allTeamsWithKnockoutData.map(teamName => {
+                const teamStats = teamProgress[teamName];
+                const winProbability = (teamStats?.winFINAL || 0) / currentNumSims;
+                const winnerOdd = calculateOddWithMargin(winProbability, marginDecimal);
+                const impliedProbability = winnerOdd === "N/A" ? 0 : 1 / Number(winnerOdd);
+                return { teamName, winProbability, winnerOdd, impliedProbability };
+            });
+            const totalWinnerImpliedProbability = winnerSelections.reduce((sum, selection) => sum + selection.impliedProbability, 0);
+            const totalWinnerMarginPercent = (totalWinnerImpliedProbability - 1) * 100;
+
+            let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Tournament Winner Odds (Margin: ${marginPercent}%)</h3>`;
+            html += `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Selection</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
+            winnerSelections.forEach(({ teamName, winProbability, winnerOdd }) => {
+                html += `<tr><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+            html += `<p class="text-xs text-gray-600 -mt-2 mb-2"><strong>Total winner market margin:</strong> ${totalWinnerMarginPercent.toFixed(2)}% (sum implied probability: ${(totalWinnerImpliedProbability * 100).toFixed(2)}%).</p>`;
+
+            if (!team) {
+                html += `<p class="text-xs text-gray-500">Tip: select a team to also view team-specific knockout and tournament totals markets.</p>`;
+                tournamentTeamOddsResultContentEl.innerHTML = html;
+                return;
+            }
+
+            const stats = teamProgress[team];
+            if (!stats) {
+                html += `<p class="text-xs text-red-500">No team-level knockout/tournament stats available for ${team}.</p>`;
+                tournamentTeamOddsResultContentEl.innerHTML = html;
+                return;
+            }
+
             const marketRows = [
-                ['Reach Round 16', stats.reachR16],
-                ['Reach Quarterfinals', stats.reachQF],
-                ['Reach Semifinals', stats.reachSF],
-                ['Reach Final', stats.reachFINAL],
-                ['Eliminate in Round 32', stats.eliminateR32],
-                ['Eliminate in Round 16', stats.eliminateR16],
-                ['Eliminate in Quarterfinals', stats.eliminateQF],
-                ['Eliminate in Semifinals', stats.eliminateSF],
-                ['Runner-up', stats.runnerUpCount],
-                ['Winner', stats.winFINAL],
-                ['3rd place', stats.thirdPlaceCount]
+                ['Reach Round 16', stats.reachR16], ['Reach Quarterfinals', stats.reachQF], ['Reach Semifinals', stats.reachSF],
+                ['Reach Final', stats.reachFINAL], ['Eliminate in Round 32', stats.eliminateR32], ['Eliminate in Round 16', stats.eliminateR16],
+                ['Eliminate in Quarterfinals', stats.eliminateQF], ['Eliminate in Semifinals', stats.eliminateSF], ['Runner-up', stats.runnerUpCount],
+                ['Winner', stats.winFINAL], ['3rd place', stats.thirdPlaceCount]
             ];
 
-            let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">${team} Tournament Odds (Margin: ${marginPercent}%)</h3>`;
+            html += `<h3 class="text-lg font-semibold text-purple-600 mt-4 mb-2">${team} Team Tournament Odds</h3>`;
             html += `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Market</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
             marketRows.forEach(([label, count]) => {
                 const prob = (count || 0) / currentNumSims;
@@ -1528,7 +1556,7 @@
             document.getElementById('ouFourthPlaceGFResult').innerHTML = '';
             document.getElementById('expectedFourthPlaceGF').textContent = '';
             tournamentTeamOddsStatusEl.textContent = '';
-            tournamentTeamOddsResultContentEl.innerHTML = 'Select a team and click "Show Team Tournament Odds".';
+            tournamentTeamOddsResultContentEl.innerHTML = 'Click "Show Tournament Odds" to view winner market odds and margin.';
         });
 
         // --- Initial Sample Data ---
