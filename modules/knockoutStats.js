@@ -5,6 +5,7 @@ export function initializeKnockoutStats(aggStats, groupTeamNames) {
             reachR32: 0, reachR16: 0, reachQF: 0, reachSF: 0, reachFINAL: 0, winFINAL: 0,
             eliminateR32: 0, eliminateR16: 0, eliminateQF: 0, eliminateSF: 0,
             runnerUpCount: 0, thirdPlaceCount: 0,
+            mostTournamentGFCount: 0, mostTournamentGACount: 0,
             tournamentGfSims: [], tournamentGaSims: [], tournamentGamesSims: []
         };
     });

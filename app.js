@@ -551,6 +551,56 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             return { date, time };
         }
 
+        function csvEscape(value) {
+            const stringValue = value === undefined || value === null ? '' : String(value);
+            return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+
+        function buildCsvRow(cells) {
+            return cells.map(csvEscape).join(',') + '\n';
+        }
+
+        function average(values) {
+            return values && values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+        }
+
+        function getLineProbabilities(values, line) {
+            if (!values || !values.length || currentNumSims === 0) {
+                return { overProb: 0, underProb: 0 };
+            }
+            const overProb = values.filter(value => value > line).length / currentNumSims;
+            const underProb = values.filter(value => value < line).length / currentNumSims;
+            return { overProb, underProb };
+        }
+
+        function findBalancedHalfPointLine(values, fallbackMean = 0) {
+            if (!values || !values.length) {
+                return Math.max(0.5, Math.floor(fallbackMean) + 0.5);
+            }
+            const maxValue = Math.max(...values);
+            const meanValue = average(values);
+            let bestLine = 0.5;
+            let bestGap = Number.POSITIVE_INFINITY;
+            let bestMeanDistance = Number.POSITIVE_INFINITY;
+            for (let base = 0; base <= Math.max(maxValue + 1, Math.ceil(meanValue) + 1); base++) {
+                const line = base + 0.5;
+                const { overProb, underProb } = getLineProbabilities(values, line);
+                const gap = Math.abs(overProb - underProb);
+                const meanDistance = Math.abs(line - fallbackMean);
+                if (gap < bestGap - 1e-9 || (Math.abs(gap - bestGap) < 1e-9 && meanDistance < bestMeanDistance)) {
+                    bestGap = gap;
+                    bestMeanDistance = meanDistance;
+                    bestLine = line;
+                }
+            }
+            return bestLine;
+        }
+
+        function buildDynamicHalfPointLines(values, fallbackMean = 0) {
+            const balanced = findBalancedHalfPointLine(values, fallbackMean);
+            return [balanced, balanced + 1, Math.max(0.5, balanced - 1)];
+        }
+
         // --- Scenario Locking ---
         function buildScenarioLockUI() {
             if (!parsedMatches || parsedMatches.length === 0) {
@@ -1140,9 +1190,11 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 (groupTeamNames[gr]||[]).forEach(tN=>{
                     aggStats[gr][tN]={
                         posCounts:[0,0,0,0], ptsSims:[], gfSims:[], gaSims:[], winsSims: [],
+                        drawsSims: [],
                         positionSims: [],
                         mostGFCount:0, mostGACount:0,
-                        autoQualifyCount: 0, bestThirdQualifyCount: 0, advanceToKnockoutCount: 0
+                        autoQualifyCount: 0, bestThirdQualifyCount: 0, advanceToKnockoutCount: 0,
+                        scoreEveryGroupGameCount: 0
                     };
                 });
             }
@@ -1160,7 +1212,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     if(tIG.length===0) continue; 
                     
                     const sTS={}; 
-                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0}); 
+                    tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0, draws: 0, scoredEveryGame: true, groupGames: 0}); 
                     let cGTG=0;
                     const simulatedGroupMatches = [];
             
@@ -1176,12 +1228,15 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                             g2 = poissonRandom(m.lambda2);
                         }
                         simulatedGroupMatches.push({ team1: m.team1, team2: m.team2, g1, g2 });
-                        if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;} 
-                        if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;} 
+                        if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;sTS[m.team1].groupGames+=1;if(g1===0)sTS[m.team1].scoredEveryGame=false;} 
+                        if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;sTS[m.team2].groupGames+=1;if(g2===0)sTS[m.team2].scoredEveryGame=false;} 
                         cGTG+=(g1+g2); 
                         if(g1>g2){if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;}}
                         else if(g2>g1){if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;}}
-                        else{if(sTS[m.team1])sTS[m.team1].pts+=1;if(sTS[m.team2])sTS[m.team2].pts+=1;}
+                        else{
+                            if(sTS[m.team1]){sTS[m.team1].pts+=1; sTS[m.team1].draws+=1;}
+                            if(sTS[m.team2]){sTS[m.team2].pts+=1; sTS[m.team2].draws+=1;}
+                        }
                         if (simTournamentTotals[m.team1]) {
                             simTournamentTotals[m.team1].gf += g1;
                             simTournamentTotals[m.team1].ga += g2;
@@ -1228,6 +1283,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                             if(rI<4)tA.posCounts[rI]++;
                             tA.ptsSims.push(t.pts);
                             tA.winsSims.push(t.wins || 0);
+                            tA.drawsSims.push(t.draws || 0);
                             tA.gfSims.push(t.gf);
                             tA.gaSims.push(t.ga);
                             tA.positionSims.push(rI + 1);
@@ -1235,6 +1291,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                             if(t.ga===mGA&&mGA>0)tA.mostGACount++;
                             if (rI < autoQualifiersPerGroup) tA.autoQualifyCount++;
                             if (rI < autoQualifiersPerGroup) tA.advanceToKnockoutCount++;
+                            if (t.scoredEveryGame && t.groupGames > 0) tA.scoreEveryGroupGameCount++;
                         }
                     });
 
@@ -1284,6 +1341,15 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     stats.tournamentGfSims.push(simTotals.gf);
                     stats.tournamentGaSims.push(simTotals.ga);
                     stats.tournamentGamesSims.push(simTotals.games);
+                });
+                const tournamentTeams = Object.entries(simTournamentTotals);
+                const maxTournamentGF = tournamentTeams.reduce((max, [, totals]) => Math.max(max, totals.gf), 0);
+                const maxTournamentGA = tournamentTeams.reduce((max, [, totals]) => Math.max(max, totals.ga), 0);
+                tournamentTeams.forEach(([team, totals]) => {
+                    const kpStats = aggStats._knockout?.teamProgress?.[team];
+                    if (!kpStats) return;
+                    if (totals.gf === maxTournamentGF && maxTournamentGF > 0) kpStats.mostTournamentGFCount++;
+                    if (totals.ga === maxTournamentGA && maxTournamentGA > 0) kpStats.mostTournamentGACount++;
                 });
             }
             return aggStats;
@@ -2127,7 +2193,6 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
             const teamName = simTeamSelectEl.value;
             const marginPercent = parseFloat(simBookieMarginEl.value);
             const marginDecimal = marginPercent / 100;
-            const advancementPreset = getSelectedAdvancementPreset();
             
             if (!groupKey || !teamName) {
                 showInlineError(generateTeamCsvErrorEl, 'Please select a group and a team first.');
@@ -2143,66 +2208,102 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
                 showInlineError(generateTeamCsvErrorEl, 'No simulation data found for the selected team.');
                 return;
             }
+            const knockoutData = simulationAggStats?._knockout?.teamProgress?.[teamName] || {};
+            const teamParsedMatches = parsedMatches.filter(match => match.group === groupKey && (match.team1 === teamName || match.team2 === teamName));
+            const xPtsReference = teamParsedMatches.reduce((sum, match) => {
+                if (match.team1 === teamName) return sum + (3 * match.p1) + match.px;
+                return sum + (3 * match.p2) + match.px;
+            }, 0);
+            const xGFReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda1 : match.lambda2), 0);
+            const xGAReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda2 : match.lambda1), 0);
 
-            let csvContent = "Date,Time,Market,Odd1,Odd2,Odd3\n";
             const { date, time } = getCsvExportDateTime();
-            
-            const toCsvRow = (market, odd1 = '', odd2 = '', odd3 = '') => `${date},${time},"${market}",${odd1},${odd2},${odd3}\n`;
 
-            const prob1st = (teamData.posCounts[0] || 0) / currentNumSims;
-            const odd1st = calculateOddWithMargin(prob1st, marginDecimal);
-            csvContent += toCsvRow(t('groupWinner'), odd1st);
+            const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
+            const rows = [];
+            const addYesNoRow = (market, probability) => {
+                const row = [date, time, '', market, '', calculateOddWithMargin(probability, marginDecimal), '', '', '', '', '', '', ''];
+                rows.push(buildCsvRow(row));
+            };
+            const addLineRow = (market, line, values) => {
+                const { overProb, underProb } = getLineProbabilities(values, line);
+                const row = [date, time, '', market, '', '', '', '', line.toFixed(1), calculateOddWithMargin(underProb, marginDecimal), calculateOddWithMargin(overProb, marginDecimal), '', ''];
+                rows.push(buildCsvRow(row));
+            };
+            const addRangeYesNoRow = (market, values, predicate) => {
+                const probability = values.filter(predicate).length / currentNumSims;
+                addYesNoRow(market, probability);
+            };
 
-            const probQualify = (teamData.advanceToKnockoutCount || 0) / currentNumSims;
-            const oddQualify = calculateOddWithMargin(probQualify, marginDecimal);
-            csvContent += toCsvRow(`${t('advanceFurther')} (${advancementPreset.label})`, oddQualify);
+            let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
+            const matchNameRow = emptyRow();
+            matchNameRow[0] = 'MATCH_NAME:World Cup 2026';
+            csvContent += buildCsvRow(matchNameRow);
+            const leagueRow = emptyRow();
+            leagueRow[0] = `LEAGUE_NAME:${teamName}`;
+            csvContent += buildCsvRow(leagueRow);
+            csvContent += buildCsvRow(emptyRow());
 
-            const prob2nd = (teamData.posCounts[1] || 0) / currentNumSims;
-            const odd2nd = calculateOddWithMargin(prob2nd, marginDecimal);
-            csvContent += toCsvRow(t('place2'), odd2nd);
+            addYesNoRow('Pobednik Grupe', (teamData.posCounts[0] || 0) / currentNumSims);
+            addYesNoRow('2. mesto u grupi', (teamData.posCounts[1] || 0) / currentNumSims);
+            addYesNoRow('3. mesto u grupi', (teamData.posCounts[2] || 0) / currentNumSims);
+            addYesNoRow('4. mesto u grupi', (teamData.posCounts[3] || 0) / currentNumSims);
+            addYesNoRow('prolazi grupu', (teamData.advanceToKnockoutCount || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/16 finala', (knockoutData.eliminateR32 || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/8 finala', (knockoutData.eliminateR16 || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/4 finala', (knockoutData.eliminateQF || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/2 finala', (knockoutData.eliminateSF || 0) / currentNumSims);
+            addYesNoRow('eliminacija u finalu', (knockoutData.runnerUpCount || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/16 finala', (knockoutData.reachR32 || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/8 finala', (knockoutData.reachR16 || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/4 finala', (knockoutData.reachQF || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/2 finala', (knockoutData.reachSF || 0) / currentNumSims);
+            addYesNoRow('dolazi do finala', (knockoutData.reachFINAL || 0) / currentNumSims);
 
-            const prob3rd = (teamData.posCounts[2] || 0) / currentNumSims;
-            const odd3rd = calculateOddWithMargin(prob3rd, marginDecimal);
-            csvContent += toCsvRow(t('place3'), odd3rd);
+            [0, 1, 2, 3, 4, 5, 6, 7, 9].forEach(points => {
+                addRangeYesNoRow(`${points} bodova u grupi`, teamData.ptsSims, value => value === points);
+            });
+            addRangeYesNoRow('1-3 boda u grupi', teamData.ptsSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow('2-4 boda u grupi', teamData.ptsSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow('4-6 bodova u grupi', teamData.ptsSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow('7+ bodova u grupi', teamData.ptsSims, value => value >= 7);
 
-            const probDirectQualify = (teamData.autoQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow(t('directQual', { n: advancementPreset.autoQualifiersPerGroup }), calculateOddWithMargin(probDirectQualify, marginDecimal));
-
-            const probBestThirdQualify = (teamData.bestThirdQualifyCount || 0) / currentNumSims;
-            csvContent += toCsvRow(t('bestThirdQual'), calculateOddWithMargin(probBestThirdQualify, marginDecimal));
-
-            const prob4th = (teamData.posCounts[3] || 0) / currentNumSims;
-            const odd4th = calculateOddWithMargin(prob4th, marginDecimal);
-            csvContent += toCsvRow(t('place4'), odd4th);
-
-            const ptsSims = teamData.ptsSims;
-            [0,1,2,3,4,5,6,7,9].forEach(pts => {
-                const probPts = ptsSims.filter(p => p === pts).length / currentNumSims;
-                const oddPts = calculateOddWithMargin(probPts, marginDecimal);
-                csvContent += toCsvRow(t('ptsExact', { n: pts }), oddPts);
+            buildDynamicHalfPointLines(teamData.ptsSims, xPtsReference).forEach((line, idx) => {
+                addLineRow(`osvojenih bodova u grupi${idx + 1}`, line, teamData.ptsSims);
+            });
+            buildDynamicHalfPointLines(teamData.gfSims, xGFReference).forEach((line, idx) => {
+                addLineRow(`datih golova u grupi${idx + 1}`, line, teamData.gfSims);
             });
 
-            const range1_3 = ptsSims.filter(p => p >= 1 && p <= 3).length / currentNumSims;
-            csvContent += toCsvRow(t('pts1_3'), calculateOddWithMargin(range1_3, marginDecimal));
-            const range2_4 = ptsSims.filter(p => p >= 2 && p <= 4).length / currentNumSims;
-            csvContent += toCsvRow(t('pts2_4'), calculateOddWithMargin(range2_4, marginDecimal));
-            const range4_6 = ptsSims.filter(p => p >= 4 && p <= 6).length / currentNumSims;
-            csvContent += toCsvRow(t('pts4_6'), calculateOddWithMargin(range4_6, marginDecimal));
+            addRangeYesNoRow('1-2 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 2);
+            addRangeYesNoRow('1-3 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow('2-4 datih golova u grupi', teamData.gfSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow('4-6 datih golova u grupi', teamData.gfSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow('5-7 datih golova u grupi', teamData.gfSims, value => value >= 5 && value <= 7);
 
-            [5.5, 6.5, 7.5].forEach(line => {
-                const overProb = ptsSims.filter(p => p > line).length / currentNumSims;
-                const underProb = ptsSims.filter(p => p < line).length / currentNumSims;
-                const overOdd = calculateOddWithMargin(overProb, marginDecimal);
-                const underOdd = calculateOddWithMargin(underProb, marginDecimal);
-                csvContent += toCsvRow(t('ptsOU'), line, overOdd, underOdd);
+            buildDynamicHalfPointLines(teamData.gaSims, xGAReference).forEach((line, idx) => {
+                addLineRow(`primljenih golova u grupi${idx + 1}`, line, teamData.gaSims);
             });
+
+            addYesNoRow('Najvise datih golova na turniru', (knockoutData.mostTournamentGFCount || 0) / currentNumSims);
+            addYesNoRow('Najvise primljenih golova na turniru', (knockoutData.mostTournamentGACount || 0) / currentNumSims);
+            addYesNoRow('Daje gol na svakoj utakmici u grupi', (teamData.scoreEveryGroupGameCount || 0) / currentNumSims);
+
+            const winLine = findBalancedHalfPointLine(teamData.winsSims, average(teamData.winsSims));
+            addLineRow('broj pobeda u grupi', winLine, teamData.winsSims);
+            const drawLine = findBalancedHalfPointLine(teamData.drawsSims, average(teamData.drawsSims));
+            addLineRow('broj neresenih u grupi', drawLine, teamData.drawsSims);
+            const tournamentGoalsLine = findBalancedHalfPointLine(knockoutData.tournamentGfSims || [], average(knockoutData.tournamentGfSims || []));
+            addLineRow('broj datih golova na turniru', tournamentGoalsLine, knockoutData.tournamentGfSims || []);
+
+            csvContent += rows.join('');
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             if (link.download !== undefined) { 
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
-                link.setAttribute("download", `odds_${teamName.replace(/\s+/g, '_')}.csv`);
+                link.setAttribute("download", `team_markets_${teamName.replace(/\s+/g, '_')}.csv`);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
