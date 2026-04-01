@@ -699,17 +699,18 @@
             let lambdaB = Math.max(0.05, totalGoals * (strengthB / (strengthA + strengthB)));
 
             // Blend with Maher multiplicative model derived from group-stage market lambdas.
-            // The Maher model (attack_A * globalAvg / defense_B) captures each team's true
-            // attacking and defensive strengths as implied by bookmaker odds, which is far more
-            // informative than Elo alone for knockout match prediction.
+            // Maher model: lambdaA = attack_A * (defense_B / globalAvg)
+            //   defense_B is goals conceded per game by B — a high value means a weak defence,
+            //   so A scores more; a low value means a strong defence, so A scores less.
+            //   Dividing by globalAvg normalises so that avg-attack vs avg-defence = globalAvg.
             const sA = teamKnockoutStrengths[teamA];
             const sB = teamKnockoutStrengths[teamB];
             const globalAvg = teamKnockoutStrengths._globalAvg;
             if (sA && sB && globalAvg > 0) {
                 // Knockout matches are played at neutral venues and are more cautious than group games
                 const knockoutFactor = 0.88;
-                const maherA = sA.attack * (globalAvg / sB.defense) * knockoutFactor;
-                const maherB = sB.attack * (globalAvg / sA.defense) * knockoutFactor;
+                const maherA = sA.attack * (sB.defense / globalAvg) * knockoutFactor;
+                const maherB = sB.attack * (sA.defense / globalAvg) * knockoutFactor;
                 // Weight: 65% market-derived Maher, 35% Elo — Elo guards against overfitting
                 // the small (3-match) group stage sample
                 const w = 0.65;
