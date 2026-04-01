@@ -19,6 +19,7 @@
         // --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
         let lockedScenarios = {}; // key: "team1||team2", value: 'home'|'draw'|'away'
+        let teamKnockoutStrengths = {}; // { team: { attack, defense }, _globalAvg: number }
         let currentLanguage = 'en';
 
         // --- Localization ---
@@ -309,97 +310,43 @@
         function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, awayPrice) {
             const normalisedUnder = (1 / underPrice) / ((1 / overPrice) + (1 / underPrice));
             const normalisedHomeNoDraw = (1 / homePrice) / ((1 / awayPrice) + (1 / homePrice));
+            const tol = 1e-7;
+            const maxIter = 100;
 
-            let totalGoals = 2.5; 
-            let supremacy = 0;    
+            // Stage 1: bisect on totalGoals (with supremacy=0) to match P(under 2.5).
+            // P(under 2.5) is monotone DECREASING in totalGoals, so this always converges.
+            let lo1 = 0.05, hi1 = 22.0;
+            let totalGoals = 2.5;
+            for (let iter = 0; iter < maxIter; iter++) {
+                totalGoals = (lo1 + hi1) / 2;
+                const xg = totalGoals / 2;
+                const p = calculateModelProbsFromXG(xg, xg, 2.5);
+                if (Math.abs(p.modelProbUnderNoExact - normalisedUnder) < tol) break;
+                // P(under) too high → need more goals to push probability down
+                if (p.modelProbUnderNoExact > normalisedUnder) lo1 = totalGoals;
+                else hi1 = totalGoals;
+            }
 
-            let homeExpectedGoals, awayExpectedGoals;
-            let increment;
-            let error, previousError;
-            let output;
-            const maxIterations = 200; 
-            const minStep = 0.001; 
-            let iterations;
-
-            const updateXGsForTotalGoals = () => {
+            // Stage 2: bisect on supremacy to match P(home wins no draw).
+            // P(home wins no draw) is monotone INCREASING in supremacy, so this always converges.
+            const maxSupremacy = totalGoals - 0.02;
+            let lo2 = -maxSupremacy, hi2 = maxSupremacy;
+            let supremacy = 0;
+            let homeExpectedGoals = totalGoals / 2, awayExpectedGoals = totalGoals / 2;
+            let finalError = 0;
+            for (let iter = 0; iter < maxIter; iter++) {
+                supremacy = (lo2 + hi2) / 2;
                 homeExpectedGoals = Math.max(0.01, totalGoals / 2 + supremacy / 2);
                 awayExpectedGoals = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-            };
-            
-            updateXGsForTotalGoals(); 
-            output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-            increment = (output.modelProbUnderNoExact > normalisedUnder) ? -0.05 : 0.05;
-
-
-            error = Math.abs(output.modelProbUnderNoExact - normalisedUnder);
-            previousError = error + 0.0001; 
-            iterations = 0;
-
-            while (error < previousError && iterations < maxIterations && Math.abs(increment) >= minStep) {
-                totalGoals += increment;
-                totalGoals = Math.max(0.02, totalGoals); 
-                updateXGsForTotalGoals();
-                
-                output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                previousError = error;
-                error = Math.abs(output.modelProbUnderNoExact - normalisedUnder);
-                
-                if (error >= previousError) { 
-                    totalGoals -= increment; 
-                    increment /= 2; 
-                    if(Math.abs(increment) < minStep) break; 
-                    totalGoals += increment; 
-                    updateXGsForTotalGoals();
-                    output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                    error = Math.abs(output.modelProbUnderNoExact - normalisedUnder); 
-                }
-                iterations++;
+                const p = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
+                const err = p.modelProbHomeWinNoDraw - normalisedHomeNoDraw;
+                finalError = Math.abs(err);
+                if (finalError < tol) break;
+                if (err > 0) hi2 = supremacy;
+                else lo2 = supremacy;
             }
-             if (error >= previousError && iterations > 0) { 
-                totalGoals -= increment; 
-             }
-             totalGoals = Math.max(0.02, totalGoals);
-             updateXGsForTotalGoals();
 
-            output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5); 
-            increment = (output.modelProbHomeWinNoDraw > normalisedHomeNoDraw) ? -0.05 : 0.05;
-            error = Math.abs(output.modelProbHomeWinNoDraw - normalisedHomeNoDraw);
-            previousError = error + 0.0001; 
-            iterations = 0;
-
-            const updateXGsForSupremacy = () => {
-                supremacy = Math.max(-(totalGoals - 0.02), Math.min(totalGoals - 0.02, supremacy));
-                homeExpectedGoals = Math.max(0.01, totalGoals / 2 + supremacy / 2);
-                awayExpectedGoals = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-            };
-            updateXGsForSupremacy();
-
-
-            while (error < previousError && iterations < maxIterations && Math.abs(increment) >= minStep) {
-                supremacy += increment;
-                updateXGsForSupremacy();
-                
-                output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                previousError = error;
-                error = Math.abs(output.modelProbHomeWinNoDraw - normalisedHomeNoDraw);
-
-                if (error >= previousError) {
-                    supremacy -= increment;
-                    increment /= 2;
-                    if(Math.abs(increment) < minStep) break;
-                    supremacy += increment;
-                    updateXGsForSupremacy();
-                    output = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                    error = Math.abs(output.modelProbHomeWinNoDraw - normalisedHomeNoDraw);
-                }
-                iterations++;
-            }
-             if (error >= previousError && iterations > 0) {
-                supremacy -= increment;
-             }
-             updateXGsForSupremacy();
-
-            const converged = error < 0.001;
+            const converged = finalError < 0.001;
             return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals, converged };
         }
 
@@ -748,11 +695,64 @@
             const totalGoals = 2.25 + Math.min(0.35, diffAbs / 1000);
             const strengthA = pA + 0.5 * pDraw;
             const strengthB = pB + 0.5 * pDraw;
-            return {
-                lambdaA: Math.max(0.05, totalGoals * (strengthA / (strengthA + strengthB))),
-                lambdaB: Math.max(0.05, totalGoals * (strengthB / (strengthA + strengthB))),
-                eloA, eloB
-            };
+            let lambdaA = Math.max(0.05, totalGoals * (strengthA / (strengthA + strengthB)));
+            let lambdaB = Math.max(0.05, totalGoals * (strengthB / (strengthA + strengthB)));
+
+            // Blend with Maher multiplicative model derived from group-stage market lambdas.
+            // The Maher model (attack_A * globalAvg / defense_B) captures each team's true
+            // attacking and defensive strengths as implied by bookmaker odds, which is far more
+            // informative than Elo alone for knockout match prediction.
+            const sA = teamKnockoutStrengths[teamA];
+            const sB = teamKnockoutStrengths[teamB];
+            const globalAvg = teamKnockoutStrengths._globalAvg;
+            if (sA && sB && globalAvg > 0) {
+                // Knockout matches are played at neutral venues and are more cautious than group games
+                const knockoutFactor = 0.88;
+                const maherA = sA.attack * (globalAvg / sB.defense) * knockoutFactor;
+                const maherB = sB.attack * (globalAvg / sA.defense) * knockoutFactor;
+                // Weight: 65% market-derived Maher, 35% Elo — Elo guards against overfitting
+                // the small (3-match) group stage sample
+                const w = 0.65;
+                lambdaA = Math.max(0.05, w * maherA + (1 - w) * lambdaA);
+                lambdaB = Math.max(0.05, w * maherB + (1 - w) * lambdaB);
+            }
+
+            return { lambdaA, lambdaB, eloA, eloB };
+        }
+
+        function buildKnockoutTeamStrengths() {
+            teamKnockoutStrengths = {};
+            const sumAttack = {}, sumDefense = {}, matchCount = {};
+
+            parsedMatches.forEach(m => {
+                if (!sumAttack[m.team1]) { sumAttack[m.team1] = 0; sumDefense[m.team1] = 0; matchCount[m.team1] = 0; }
+                if (!sumAttack[m.team2]) { sumAttack[m.team2] = 0; sumDefense[m.team2] = 0; matchCount[m.team2] = 0; }
+                sumAttack[m.team1] += m.lambda1;
+                sumDefense[m.team1] += m.lambda2;
+                matchCount[m.team1]++;
+                sumAttack[m.team2] += m.lambda2;
+                sumDefense[m.team2] += m.lambda1;
+                matchCount[m.team2]++;
+            });
+
+            const teams = Object.keys(sumAttack);
+            if (teams.length === 0) return;
+
+            // League-average goals per game (attack == defense by construction since goals are symmetric)
+            const globalAvg = teams.reduce((s, t) => s + sumAttack[t] / matchCount[t], 0) / teams.length;
+
+            // Bayesian shrinkage: blend each team's observed rates toward the global mean.
+            // Prior weight of 3 ghost matches prevents extreme values from small group samples.
+            const priorWeight = 3;
+            teams.forEach(t => {
+                const n = matchCount[t];
+                const w = n + priorWeight;
+                teamKnockoutStrengths[t] = {
+                    attack:  (sumAttack[t]  + globalAvg * priorWeight) / w,
+                    defense: (sumDefense[t] + globalAvg * priorWeight) / w
+                };
+            });
+            teamKnockoutStrengths._globalAvg = globalAvg;
         }
 
         function simulateKnockoutMatch(teamA, teamB) {
@@ -1069,7 +1069,10 @@
         }
 
         function runSimulation(numSims) {
-            const aggStats={}; 
+            // Precompute team attack/defense strength parameters from group-stage lambdas
+            // so getKnockoutLambdasFromElo can use the Maher model for knockout matches.
+            buildKnockoutTeamStrengths();
+            const aggStats={};
             const advancementPreset = getSelectedAdvancementPreset();
             const autoQualifiersPerGroup = Math.max(0, advancementPreset.autoQualifiersPerGroup || 0);
             const bestThirdSlots = Math.max(0, advancementPreset.bestThirdSlots || 0);
