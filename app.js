@@ -156,48 +156,33 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const teamRows = [];
             const teamStats = {};
             parsedMatches.forEach(match => {
-                if (!teamStats[match.team1]) teamStats[match.team1] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0 };
-                if (!teamStats[match.team2]) teamStats[match.team2] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0 };
+                if (!teamStats[match.team1]) teamStats[match.team1] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0, xPts: 0 };
+                if (!teamStats[match.team2]) teamStats[match.team2] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0, xPts: 0 };
                 teamStats[match.team1].matches += 1;
                 teamStats[match.team1].lambdaFor += match.lambda1;
                 teamStats[match.team1].lambdaAgainst += match.lambda2;
+                teamStats[match.team1].xPts += (3 * match.p1) + match.px;
                 teamStats[match.team2].matches += 1;
                 teamStats[match.team2].lambdaFor += match.lambda2;
                 teamStats[match.team2].lambdaAgainst += match.lambda1;
+                teamStats[match.team2].xPts += (3 * match.p2) + match.px;
             });
 
             Object.entries(teamStats)
                 .sort(([teamA, statsA], [teamB, statsB]) => statsA.group.localeCompare(statsB.group) || teamA.localeCompare(teamB))
                 .forEach(([team, stats]) => {
-                    const matches = stats.matches || 1;
                     teamRows.push(`
                         <tr>
                             <td>${stats.group}</td>
                             <td class="font-medium">${team}</td>
                             <td>${stats.matches}</td>
+                            <td>${stats.xPts.toFixed(3)}</td>
                             <td>${stats.lambdaFor.toFixed(3)}</td>
                             <td>${stats.lambdaAgainst.toFixed(3)}</td>
                             <td>${(stats.lambdaFor - stats.lambdaAgainst).toFixed(3)}</td>
                         </tr>
                     `);
                 });
-
-            const matchRows = parsedMatches
-                .slice()
-                .sort((a, b) => a.group.localeCompare(b.group) || a.lineNum - b.lineNum)
-                .map(match => `
-                    <tr>
-                        <td>${match.group}</td>
-                        <td>${match.lineNum}</td>
-                        <td class="font-medium">${match.team1}</td>
-                        <td class="font-medium">${match.team2}</td>
-                        <td>${match.lambda1.toFixed(3)}</td>
-                        <td>${match.lambda2.toFixed(3)}</td>
-                        <td>${(match.lambda1 + match.lambda2).toFixed(3)}</td>
-                        <td>${(match.lambda1 - match.lambda2).toFixed(3)}</td>
-                    </tr>
-                `)
-                .join('');
 
             lambdaViewContentEl.innerHTML = `
                 <div class="mb-6">
@@ -209,6 +194,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                                     <th>Group</th>
                                     <th>Team</th>
                                     <th>Matches</th>
+                                    <th>xPts Sum</th>
                                     <th>Lambda For Sum</th>
                                     <th>Lambda Against Sum</th>
                                     <th>Net Lambda Sum</th>
@@ -228,13 +214,32 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                                     <th>Line</th>
                                     <th>Team 1</th>
                                     <th>Team 2</th>
+                                    <th>Team 1 xPts</th>
+                                    <th>Team 2 xPts</th>
                                     <th>Lambda 1</th>
                                     <th>Lambda 2</th>
                                     <th>Total</th>
                                     <th>Supremacy</th>
                                 </tr>
                             </thead>
-                            <tbody>${matchRows}</tbody>
+                            <tbody>${parsedMatches
+                                .slice()
+                                .sort((a, b) => a.group.localeCompare(b.group) || a.lineNum - b.lineNum)
+                                .map(match => `
+                                    <tr>
+                                        <td>${match.group}</td>
+                                        <td>${match.lineNum}</td>
+                                        <td class="font-medium">${match.team1}</td>
+                                        <td class="font-medium">${match.team2}</td>
+                                        <td>${((3 * match.p1) + match.px).toFixed(3)}</td>
+                                        <td>${((3 * match.p2) + match.px).toFixed(3)}</td>
+                                        <td>${match.lambda1.toFixed(3)}</td>
+                                        <td>${match.lambda2.toFixed(3)}</td>
+                                        <td>${(match.lambda1 + match.lambda2).toFixed(3)}</td>
+                                        <td>${(match.lambda1 - match.lambda2).toFixed(3)}</td>
+                                    </tr>
+                                `)
+                                .join('')}</tbody>
                         </table>
                     </div>
                 </div>
