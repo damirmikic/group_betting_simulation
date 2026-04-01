@@ -1317,6 +1317,26 @@
                 html += `</tr>`;
             });
             html+=`</tbody></table>`;
+
+            const winnerSelections = teams.map(teamName => {
+                const teamStats = groupData[teamName];
+                const winnerProbability = (teamStats && teamStats.posCounts && currentNumSims > 0)
+                    ? (teamStats.posCounts[0] || 0) / currentNumSims
+                    : 0;
+                const winnerOdd = calculateOddWithMargin(winnerProbability, mainMarginDecimal);
+                const impliedProbability = winnerOdd === "N/A" ? 0 : 1 / Number(winnerOdd);
+                return { teamName, winnerProbability, winnerOdd, impliedProbability };
+            });
+            const totalWinnerImpliedProbability = winnerSelections.reduce((sum, selection) => sum + selection.impliedProbability, 0);
+            const totalWinnerMarginPercent = (totalWinnerImpliedProbability - 1) * 100;
+
+            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Group Winner Odds (All Selections):</h4>`;
+            html += `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Selection</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
+            winnerSelections.forEach(({ teamName, winnerProbability, winnerOdd }) => {
+                html += `<tr><td>${teamName}</td><td>${(winnerProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+            html += `<p class="text-xs text-gray-600 -mt-2 mb-2"><strong>Total winner market margin:</strong> ${totalWinnerMarginPercent.toFixed(2)}% (sum implied probability: ${(totalWinnerImpliedProbability * 100).toFixed(2)}%).</p>`;
             
             html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">To Qualify (${advancementPreset.label}):</h4><table class="odds-table text-xs sm:text-sm"><thead><tr><th>Team</th><th>P(Qualify)</th><th>Odd</th></tr></thead><tbody>`;
             teams.forEach(tN=>{const tS=groupData[tN],tP=(tS&&currentNumSims>0)?(tS.advanceToKnockoutCount||0)/currentNumSims:0,o=calculateOddWithMargin(tP,mainMarginDecimal);html+=`<tr><td>${tN}</td><td>${(tP*100).toFixed(1)}%</td><td>${o}</td></tr>`;});html+=`</tbody></table>`;
