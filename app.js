@@ -188,21 +188,13 @@
         inputModeEl.addEventListener('change', updateInputModeUi);
         
         // --- xG Calculation & Helpers ---
-        function factorialJs(n) {
-            if (n < 0) return NaN;
-            if (n === 0) return 1;
-            let result = 1;
-            for (let i = 1; i <= n; i++) { result *= i; }
-            return result;
-        }
-
-        function poissonPMF(mu, k) { 
+        function poissonPMF(mu, k) {
             if (mu < 0 || k < 0 || !Number.isInteger(k)) return 0;
-            if (mu === 0 && k === 0) return 1;
-            if (mu === 0 && k > 0) return 0;
-            const factK = factorialJs(k);
-            if (factK === Infinity || factK === 0) return 0; 
-            return (Math.pow(mu, k) * Math.exp(-mu)) / factK;
+            if (mu === 0) return k === 0 ? 1 : 0;
+            // Use log-space arithmetic to avoid factorial overflow for large k
+            let logP = k * Math.log(mu) - mu;
+            for (let i = 1; i <= k; i++) logP -= Math.log(i);
+            return Math.exp(logP);
         }
 
         function poissonRandom(lambda) { 
@@ -341,7 +333,8 @@
              }
              updateXGsForSupremacy();
 
-            return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals };
+            const converged = error < 0.001;
+            return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals, converged };
         }
 
         function parseDelimitedLine(line, delimiter) {
@@ -493,7 +486,7 @@
                 if (!oddsStrings || oddsStrings.length !== 5) { errors.push(`L${index+1}: Odds extract fail. Odds:${oddsStrings}. L:"${line}"`); return; }
                 const odds = oddsStrings.map(parseFloat);
                 if (odds.some(isNaN)) { errors.push(`L${index+1}: Invalid odds. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
-                if (odds.some(o => o <= 0)) { errors.push(`L${index+1}: Odds must be >0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
+                if (odds.some(o => o <= 1)) { errors.push(`L${index+1}: Odds must be >1.0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
 
                 const [o1, ox, o2, oUnder25, oOver25] = odds;
                 const sumInv1X2 = (1/o1)+(1/ox)+(1/o2); if (sumInv1X2 === 0) { errors.push(`L${index+1}: Sum inv 1X2 odds 0. L:"${line}"`); return; }
@@ -503,8 +496,11 @@
                 let lambda1 = xGResult.homeXG;
                 let lambda2 = xGResult.awayXG;
 
+                if (!xGResult.converged) {
+                   warnings.push(`L${index+1}: xG solver did not converge for ${team1Name} v ${team2Name} (residual error too large). Results may be less accurate.`);
+                }
                 if (isNaN(lambda1) || isNaN(lambda2) || lambda1 <=0 || lambda2 <=0) {
-                   warnings.push(`L${index+1}: xG calc fail/non-positive for ${team1Name}v${team2Name}. Defaulting. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
+                   warnings.push(`L${index+1}: xG calc produced invalid values for ${team1Name} v ${team2Name}. Using fallback. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
                    const p_under_fb = (1/oUnder25) / ((1/oOver25) + (1/oUnder25));
                    const lt_fb_simple_approx = 2.5;
                    const s1_fb = p1_market + 0.5 * px_market;
@@ -786,7 +782,10 @@
                     errors.push(`Bracket L${index + 1}: Could not parse match number from "${matchIdRaw}".`);
                     return;
                 }
-                if (seenMatchIds.has(matchNum)) warnings.push(`Bracket L${index + 1}: Duplicate match number ${matchNum}; keeping both entries.`);
+                if (seenMatchIds.has(matchNum)) {
+                    warnings.push(`Bracket L${index + 1}: Duplicate match number ${matchNum}; skipping this entry.`);
+                    return;
+                }
                 seenMatchIds.add(matchNum);
 
                 parsedBracketMatches.push({
@@ -1295,9 +1294,9 @@
             calculatedOddsResultContentEl.innerHTML = "";
 
             if (!selectedGroupKey) { simulatedOddsStatusEl.textContent = "Select group."; return; }
-            if (isNaN(mainMarginPercent) || mainMarginPercent < 0 ) { 
-                simulatedOddsStatusEl.textContent = "Please enter a valid non-negative margin."; 
-                return; 
+            if (isNaN(mainMarginPercent) || mainMarginPercent < 0 || mainMarginPercent > 100) {
+                simulatedOddsStatusEl.textContent = "Please enter a valid margin between 0 and 100.";
+                return;
             }
             if (Object.keys(simulationAggStats).length === 0 || !simulationAggStats[selectedGroupKey] || currentNumSims === 0) { simulatedOddsStatusEl.textContent = "No sim data. Run sim."; return; }
             
@@ -1409,7 +1408,7 @@
             tournamentTeamOddsStatusEl.textContent = '';
             tournamentTeamOddsResultContentEl.innerHTML = '';
 
-            if (isNaN(marginPercent) || marginPercent < 0) { tournamentTeamOddsStatusEl.textContent = 'Enter a valid non-negative margin.'; return; }
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) { tournamentTeamOddsStatusEl.textContent = 'Enter a valid margin between 0 and 100.'; return; }
             if (currentNumSims === 0) { tournamentTeamOddsStatusEl.textContent = 'Run simulation first.'; return; }
 
             const marginDecimal = marginPercent / 100;
@@ -1493,7 +1492,7 @@
             customProbAndOddResultAreaEl.innerHTML = ""; 
 
             if (!groupKey || !teamName) { customProbAndOddResultAreaEl.innerHTML = '<p class="text-red-500">Select group and team.</p>'; return; }
-            if (isNaN(marginPercent) || marginPercent < 0) { customProbAndOddResultAreaEl.innerHTML = '<p class="text-red-500">Valid margin needed.</p>'; return; }
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) { customProbAndOddResultAreaEl.innerHTML = '<p class="text-red-500">Valid margin (0–100) needed.</p>'; return; }
             if (isNaN(value1) || (operator === 'between' && isNaN(value2))) { customProbAndOddResultAreaEl.innerHTML = '<p class="text-red-500">Invalid Value(s) for prop.</p>'; return; }
             if (operator === 'between' && value1 >= value2) { customProbAndOddResultAreaEl.innerHTML = '<p class="text-red-500">For "Between", Value 1 must be < Value 2.</p>'; return; }
             
@@ -1595,8 +1594,8 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
                 alert("Please select a group and a team first.");
                 return;
             }
-             if (isNaN(marginPercent) || marginPercent < 0) {
-                alert("Please enter a valid non-negative margin.");
+             if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                alert("Please enter a valid margin between 0 and 100.");
                 return;
             }
 
@@ -1681,8 +1680,8 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
                 alert("Please select a group first.");
                 return;
             }
-             if (isNaN(marginPercent) || marginPercent < 0) {
-                alert("Please enter a valid non-negative margin.");
+             if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                alert("Please enter a valid margin between 0 and 100.");
                 return;
             }
             const groupData = simulationAggStats[groupKey];
