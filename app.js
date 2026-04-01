@@ -1,22 +1,11 @@
-        // --- Tab Switching Logic ---
-        function openTab(event, tabName) {
-            let i, tabcontent, tabbuttons;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-                tabcontent[i].classList.remove("active");
-            }
-            tabbuttons = document.getElementsByClassName("tab-button");
-            for (i = 0; i < tabbuttons.length; i++) {
-                tabbuttons[i].classList.remove("active");
-            }
-            document.getElementById(tabName).style.display = "block";
-            document.getElementById(tabName).classList.add("active");
-            event.currentTarget.classList.add("active");
-        }
-        document.addEventListener('DOMContentLoaded', () => { document.querySelector('.tab-button').click(); });
+import { runKnockoutStage } from './modules/knockoutStage.js';
+import { initializeKnockoutStats, incrementRoundReach } from './modules/knockoutStats.js';
+import { initializeTabSwitching } from './modules/uiTabs.js';
 
-        // --- Global Variables ---
+                // --- Tab Switching Logic ---
+        initializeTabSwitching();
+
+// --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
         let lockedScenarios = {}; // key: "team1||team2", value: 'home'|'draw'|'away'
         let teamKnockoutStrengths = {}; // { team: { attack, defense }, _globalAvg: number }
@@ -978,113 +967,6 @@
             }, 50);
         });
 
-        function initializeKnockoutStats(aggStats) {
-            aggStats._knockout = { teamProgress: {} };
-            Object.values(groupTeamNames).flat().forEach(team => {
-                aggStats._knockout.teamProgress[team] = {
-                    reachR32: 0, reachR16: 0, reachQF: 0, reachSF: 0, reachFINAL: 0, winFINAL: 0,
-                    eliminateR32: 0, eliminateR16: 0, eliminateQF: 0, eliminateSF: 0,
-                    runnerUpCount: 0, thirdPlaceCount: 0,
-                    tournamentGfSims: [], tournamentGaSims: [], tournamentGamesSims: []
-                };
-            });
-        }
-
-        function incrementRoundReach(aggStats, team, round) {
-            const teamStats = aggStats?._knockout?.teamProgress?.[team];
-            if (!teamStats) return;
-            if (round === 'R32') teamStats.reachR32++;
-            if (round === 'R16') teamStats.reachR16++;
-            if (round === 'QF') teamStats.reachQF++;
-            if (round === 'SF') teamStats.reachSF++;
-            if (round === 'FINAL') teamStats.reachFINAL++;
-        }
-
-        function resolveBracketReference(ref, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers) {
-            const cleaned = String(ref || '').trim();
-            const winnerGroupMatch = cleaned.match(/^Winner Group\s+([A-Za-z0-9]+)$/i);
-            if (winnerGroupMatch) return groupStandings[winnerGroupMatch[1]]?.[0]?.name || null;
-            const runnerUpGroupMatch = cleaned.match(/^Runner-up Group\s+([A-Za-z0-9]+)$/i);
-            if (runnerUpGroupMatch) return groupStandings[runnerUpGroupMatch[1]]?.[1]?.name || null;
-            const thirdGroupMatch = cleaned.match(/^3rd Group\s+(.+)$/i);
-            if (thirdGroupMatch) {
-                const groups = thirdGroupMatch[1].split('/').map(g => g.trim()).filter(Boolean);
-                const pick = thirdRankedList.find(team => groups.includes(team.group) && thirdQualifiedByGroup.has(team.group) && !usedTeams.has(team.name));
-                return pick?.name || null;
-            }
-            const winnerMatchRef = cleaned.match(/^Winner Match\s+(\d+)$/i);
-            if (winnerMatchRef) return knockoutWinners[parseInt(winnerMatchRef[1], 10)] || null;
-            const loserMatchRef = cleaned.match(/^Loser Match\s+(\d+)$/i);
-            if (loserMatchRef) return knockoutLosers[parseInt(loserMatchRef[1], 10)] || null;
-            return cleaned || null;
-        }
-
-        function runKnockoutStage(aggStats, groupStandings, thirdRankedList, simTournamentTotals) {
-            if (!parsedBracketMatches.length) return;
-            const roundOrder = { R32: 1, R16: 2, QF: 3, SF: 4, '3RD': 5, FINAL: 6 };
-            const sortedBracketMatches = [...parsedBracketMatches].sort((a, b) => {
-                const roundDiff = (roundOrder[a.round] || 99) - (roundOrder[b.round] || 99);
-                if (roundDiff !== 0) return roundDiff;
-                return a.matchNum - b.matchNum;
-            });
-            const knockoutWinners = {};
-            const knockoutLosers = {};
-            const thirdQualifiedByGroup = new Set(thirdRankedList.map(t => t.group));
-            const usedTeamsInRound = {};
-            const pendingMatches = [...sortedBracketMatches];
-
-            while (pendingMatches.length > 0) {
-                let resolvedAny = false;
-                for (let idx = 0; idx < pendingMatches.length; idx++) {
-                    const match = pendingMatches[idx];
-                    usedTeamsInRound[match.round] = usedTeamsInRound[match.round] || new Set();
-                    const usedTeams = usedTeamsInRound[match.round];
-                    const teamA = resolveBracketReference(match.sideARef, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers);
-                    const teamB = resolveBracketReference(match.sideBRef, groupStandings, thirdQualifiedByGroup, thirdRankedList, usedTeams, knockoutWinners, knockoutLosers);
-                    if (!teamA || !teamB || teamA === teamB) continue;
-
-                    usedTeams.add(teamA);
-                    usedTeams.add(teamB);
-                    incrementRoundReach(aggStats, teamA, match.round);
-                    incrementRoundReach(aggStats, teamB, match.round);
-
-                    const { winner, loser, goalsA, goalsB } = simulateKnockoutMatch(teamA, teamB);
-                    if (simTournamentTotals[teamA]) {
-                        simTournamentTotals[teamA].gf += goalsA;
-                        simTournamentTotals[teamA].ga += goalsB;
-                        simTournamentTotals[teamA].games += 1;
-                    }
-                    if (simTournamentTotals[teamB]) {
-                        simTournamentTotals[teamB].gf += goalsB;
-                        simTournamentTotals[teamB].ga += goalsA;
-                        simTournamentTotals[teamB].games += 1;
-                    }
-                    knockoutWinners[match.matchNum] = winner;
-                    knockoutLosers[match.matchNum] = loser;
-                    const loserStats = aggStats._knockout?.teamProgress?.[loser];
-                    if (loserStats) {
-                        if (match.round === 'R32') loserStats.eliminateR32++;
-                        if (match.round === 'R16') loserStats.eliminateR16++;
-                        if (match.round === 'QF') loserStats.eliminateQF++;
-                        if (match.round === 'SF') loserStats.eliminateSF++;
-                        if (match.round === 'FINAL') loserStats.runnerUpCount++;
-                    }
-                    if (match.round === '3RD' && aggStats._knockout?.teamProgress?.[winner]) {
-                        aggStats._knockout.teamProgress[winner].thirdPlaceCount++;
-                    }
-                    if (match.round === 'FINAL' && aggStats._knockout?.teamProgress?.[winner]) {
-                        aggStats._knockout.teamProgress[winner].winFINAL++;
-                    }
-
-                    pendingMatches.splice(idx, 1);
-                    idx--;
-                    resolvedAny = true;
-                }
-
-                if (!resolvedAny) break;
-            }
-        }
-
         function runSimulation(numSims) {
             // Precompute team attack/defense strength parameters from group-stage lambdas
             // so getKnockoutLambdasFromElo can use the Maher model for knockout matches.
@@ -1109,7 +991,7 @@
                     };
                 });
             }
-            initializeKnockoutStats(aggStats);
+            initializeKnockoutStats(aggStats, groupTeamNames);
             for(let i=0; i<numSims; i++){ 
                 const simTournamentTotals = {};
                 Object.keys(aggStats._knockout.teamProgress).forEach(team => {
@@ -1230,8 +1112,16 @@
                         tA.bestThirdQualifyCount++;
                         tA.advanceToKnockoutCount++;
                     });
-                    if (Object.keys(teamEloRatings).length > 0 && parsedBracketMatches.length > 0) {
-                        runKnockoutStage(aggStats, groupStandings, sortedThirds.slice(0, bestThirdSlots), simTournamentTotals);
+                    if (parsedBracketMatches.length > 0) {
+                        runKnockoutStage({
+                            parsedBracketMatches,
+                            aggStats,
+                            groupStandings,
+                            thirdRankedList: sortedThirds.slice(0, bestThirdSlots),
+                            simTournamentTotals,
+                            simulateKnockoutMatch,
+                            incrementRoundReach
+                        });
                     }
                 }
                 Object.entries(aggStats._knockout.teamProgress).forEach(([team, stats]) => {
@@ -1922,7 +1812,6 @@ B Albania vs Spain 10.00 5.50 1.30 2.00 1.80
 B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
         eloDataEl.value = ``;
 
-        window.openTab = openTab; 
         populateTieBreakPresets();
         populateAdvancementPresets();
         updateInputModeUi();
@@ -2121,5 +2010,4 @@ B Croatia vs Italy 3.00 3.10 2.60 1.55 2.40`;
             langToggleBtnEl.textContent = currentLanguage === 'en' ? '🌐 EN / SR' : '🌐 SR / EN';
             langToggleBtnEl.title = `Current language: ${currentLanguage.toUpperCase()}. Click to switch.`;
         });
-
 
