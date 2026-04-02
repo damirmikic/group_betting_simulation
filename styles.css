@@ -301,7 +301,18 @@ input[type="file"].hidden-file-input { display: none; }
 }
 
 /* === 17. Scenario Lock === */
-.scenario-lock-select {
+.scenario-lock-score-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.scenario-lock-score-input,
+.scenario-lock-clear {
     background-color: #fff;
-    min-width: 140px;
+}
+
+.scenario-lock-score-input {
+    width: 68px;
 }

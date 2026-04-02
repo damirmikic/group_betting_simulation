@@ -7,7 +7,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
 // --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
-        let lockedScenarios = {}; // key: "team1||team2", value: 'home'|'draw'|'away'
+        let lockedScenarios = {}; // key: "team1||team2", value: { g1, g2 }
         let currentLanguage = 'en';
 
         // --- Localization ---
@@ -633,45 +633,68 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             scenarioLockTableBodyEl.innerHTML = '';
             parsedMatches.forEach((m, idx) => {
                 const key = buildMatchPairKey(m.team1, m.team2);
-                const currentLock = lockedScenarios[key] || 'simulate';
+                const currentLock = lockedScenarios[key] || null;
                 const tr = document.createElement('tr');
                 tr.className = idx % 2 === 0 ? 'bg-white' : 'bg-amber-50';
                 tr.innerHTML = `
                     <td class="px-3 py-1.5 text-gray-600">Gr. ${m.group}</td>
                     <td class="px-3 py-1.5 font-medium">${m.team1} vs ${m.team2}</td>
                     <td class="px-3 py-1.5">
-                        <select data-match-key="${key}" class="scenario-lock-select border border-amber-300 rounded px-1 py-0.5 text-xs bg-white">
-                            <option value="simulate" ${currentLock === 'simulate' ? 'selected' : ''}>🎲 Simulate</option>
-                            <option value="home" ${currentLock === 'home' ? 'selected' : ''}>${m.team1} wins</option>
-                            <option value="draw" ${currentLock === 'draw' ? 'selected' : ''}>Draw</option>
-                            <option value="away" ${currentLock === 'away' ? 'selected' : ''}>${m.team2} wins</option>
-                        </select>
+                        <div class="scenario-lock-score-row">
+                            <input type="number" min="0" step="1" inputmode="numeric" data-match-key="${key}" data-team-side="team1" value="${currentLock ? currentLock.g1 : ''}" class="scenario-lock-score-input border border-amber-300 rounded px-2 py-1 text-xs bg-white" placeholder="${m.team1}">
+                            <span class="text-amber-700 font-medium">:</span>
+                            <input type="number" min="0" step="1" inputmode="numeric" data-match-key="${key}" data-team-side="team2" value="${currentLock ? currentLock.g2 : ''}" class="scenario-lock-score-input border border-amber-300 rounded px-2 py-1 text-xs bg-white" placeholder="${m.team2}">
+                            <button type="button" data-match-key="${key}" class="scenario-lock-clear border border-amber-300 rounded px-2 py-1 text-xs bg-white text-amber-800">Simulate</button>
+                        </div>
                     </td>`;
                 scenarioLockTableBodyEl.appendChild(tr);
             });
-            // Sync selects to lockedScenarios on change
-            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-select').forEach(sel => {
-                sel.addEventListener('change', () => {
-                    const key = sel.dataset.matchKey;
-                    if (sel.value === 'simulate') delete lockedScenarios[key];
-                    else lockedScenarios[key] = sel.value;
+
+            function syncLockedScore(key) {
+                const inputs = scenarioLockTableBodyEl.querySelectorAll(`.scenario-lock-score-input[data-match-key="${key}"]`);
+                const team1Input = Array.from(inputs).find(input => input.dataset.teamSide === 'team1');
+                const team2Input = Array.from(inputs).find(input => input.dataset.teamSide === 'team2');
+                if (!team1Input || !team2Input) return;
+
+                const raw1 = team1Input.value.trim();
+                const raw2 = team2Input.value.trim();
+
+                if (raw1 === '' && raw2 === '') {
+                    delete lockedScenarios[key];
+                    return;
+                }
+
+                const g1 = Number(raw1);
+                const g2 = Number(raw2);
+                if (Number.isInteger(g1) && g1 >= 0 && Number.isInteger(g2) && g2 >= 0) {
+                    lockedScenarios[key] = { g1, g2 };
+                } else {
+                    delete lockedScenarios[key];
+                }
+            }
+
+            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-score-input').forEach(input => {
+                input.addEventListener('input', () => {
+                    const key = input.dataset.matchKey;
+                    syncLockedScore(key);
+                });
+            });
+
+            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-clear').forEach(button => {
+                button.addEventListener('click', () => {
+                    const key = button.dataset.matchKey;
+                    const inputs = scenarioLockTableBodyEl.querySelectorAll(`.scenario-lock-score-input[data-match-key="${key}"]`);
+                    inputs.forEach(input => { input.value = ''; });
+                    delete lockedScenarios[key];
                 });
             });
         }
 
-        function simulateLockedMatch(m, outcome) {
-            // Rejection sampling: generate until we get the locked outcome (max 300 tries)
-            for (let tries = 0; tries < 300; tries++) {
-                const g1 = poissonRandom(m.lambda1);
-                const g2 = poissonRandom(m.lambda2);
-                if (outcome === 'home' && g1 > g2) return { g1, g2 };
-                if (outcome === 'draw' && g1 === g2) return { g1, g2 };
-                if (outcome === 'away' && g2 > g1) return { g1, g2 };
-            }
-            // Fallback for very improbable outcomes
-            if (outcome === 'home') return { g1: 1, g2: 0 };
-            if (outcome === 'draw') return { g1: 1, g2: 1 };
-            return { g1: 0, g2: 1 };
+        function simulateLockedMatch(m, lockedScore) {
+            return {
+                g1: lockedScore?.g1 ?? 0,
+                g2: lockedScore?.g2 ?? 0
+            };
         }
 
         function clearOverUnderDisplay() {
@@ -2430,7 +2453,7 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
         // --- New Feature: Scenario Lock clear button ---
         clearLocksBtnEl.addEventListener('click', () => {
             lockedScenarios = {};
-            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-select').forEach(sel => { sel.value = 'simulate'; });
+            scenarioLockTableBodyEl.querySelectorAll('.scenario-lock-score-input').forEach(input => { input.value = ''; });
         });
 
         // --- New Feature: Export Raw Simulation Data ---
