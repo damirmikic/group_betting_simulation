@@ -66,6 +66,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         // --- DOM Elements ---
         const matchDataEl = document.getElementById('matchData'), numSimulationsEl = document.getElementById('numSimulations');
+        const numSimulationsPresetEl = document.getElementById('numSimulationsPreset');
         const parseButtonEl = document.getElementById('parseButton'), runButtonEl = document.getElementById('runButton'), clearButtonEl = document.getElementById('clearButton');
         const statusAreaEl = document.getElementById('statusArea'), loaderEl = document.getElementById('loader'), resultsContentEl = document.getElementById('resultsContent');
         const csvFileInputEl = document.getElementById('csvFileInput'), csvFileNameEl = document.getElementById('csvFileName');
@@ -110,6 +111,26 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const exportRawDataErrorEl = document.getElementById('exportRawDataError');
         const generateTeamCsvErrorEl = document.getElementById('generateTeamCsvError');
         const generateGroupCsvErrorEl = document.getElementById('generateGroupCsvError');
+
+        function syncSimulationPresetFromInput() {
+            const trimmedValue = numSimulationsEl.value.trim();
+            if (!trimmedValue) {
+                numSimulationsPresetEl.value = 'custom';
+                return;
+            }
+            const presetOption = Array.from(numSimulationsPresetEl.options).find(option => option.value === trimmedValue);
+            numSimulationsPresetEl.value = presetOption ? trimmedValue : 'custom';
+        }
+
+        numSimulationsPresetEl.addEventListener('change', () => {
+            if (numSimulationsPresetEl.value !== 'custom') {
+                numSimulationsEl.value = numSimulationsPresetEl.value;
+            }
+            numSimulationsEl.focus();
+        });
+
+        numSimulationsEl.addEventListener('input', syncSimulationPresetFromInput);
+        syncSimulationPresetFromInput();
 
         // --- Status Bar Helper ---
         const _STATUS_ICONS = {
@@ -1987,7 +2008,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         // --- Clear Button ---
         clearButtonEl.addEventListener('click', () => {
-            matchDataEl.value = ""; numSimulationsEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = '<span class="text-gray-400">Results will appear here...</span>';
+            matchDataEl.value = ""; numSimulationsEl.value = "10000"; numSimulationsPresetEl.value = "10000"; statusAreaEl.innerHTML = ""; resultsContentEl.innerHTML = '<span class="text-gray-400">Results will appear here...</span>';
             eloDataEl.value = "";
             bracketDataEl.value = "";
             parsedMatches=[]; parsedBracketMatches=[]; teamEloRatings={}; allTeams.clear(); groupedMatches={}; groupTeamNames={}; simulationAggStats={}; currentNumSims=0;
@@ -2019,6 +2040,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             exportRawDataSectionEl.classList.add('hidden');
             multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
             multiGroupViewStatusEl.textContent = '';
+            syncSimulationPresetFromInput();
             renderLambdaView();
         });
 
