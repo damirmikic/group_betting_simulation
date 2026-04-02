@@ -555,6 +555,30 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 .replace(/\\r/g, '\n');
         }
 
+        function normalizeAliasKey(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\./g, '')
+                .replace(/&/g, ' and ')
+                .replace(/[^a-zA-Z0-9]+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        const TEAM_NAME_ALIASES = {
+            'bosnia and herzegovina': 'Bosnia & Herzegovina',
+            'curacao': 'Curaçao',
+            'dr congo': 'DR Congo',
+            'd r congo': 'DR Congo',
+            'democratic republic congo': 'DR Congo'
+        };
+
+        function canonicalizeTeamName(teamName) {
+            const cleaned = String(teamName || '').trim();
+            return TEAM_NAME_ALIASES[normalizeAliasKey(cleaned)] || cleaned;
+        }
+
         function isLikelyOddsHeader(parts) {
             const normalized = parts.map(p => String(p).trim().toUpperCase());
             return normalized.length >= 8
@@ -736,7 +760,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         }
 
         function buildMatchPairKey(team1, team2) {
-            return [team1, team2].sort((a, b) => a.localeCompare(b)).join('||');
+            return [canonicalizeTeamName(team1), canonicalizeTeamName(team2)]
+                .sort((a, b) => a.localeCompare(b))
+                .join('||');
         }
 
         function captureCurrentParsedState() {
@@ -811,6 +837,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                    lambda1 = Math.max(0.05, lambda1); lambda2 = Math.max(0.05, lambda2);
                 }
 
+                team1Name = canonicalizeTeamName(team1Name);
+                team2Name = canonicalizeTeamName(team2Name);
+
                 const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2 };
                 parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
                 if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
@@ -846,7 +875,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     return;
                 }
                 const group = (parts[0] || '').trim();
-                const team = (parts[1] || '').trim();
+                const team = canonicalizeTeamName((parts[1] || '').trim());
                 const elo = parseFloat(parts[2]);
 
                 const maybeHeader = group.toLowerCase() === 'group' && team.toLowerCase() === 'team' && Number.isNaN(elo);
@@ -902,7 +931,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     return;
                 }
                 const group = (parts[0] || '').trim();
-                const team = (parts[1] || '').trim();
+                const team = canonicalizeTeamName((parts[1] || '').trim());
                 const elo = parseFloat(parts[2]);
                 const maybeHeader = group.toLowerCase() === 'group' && team.toLowerCase() === 'team' && Number.isNaN(elo);
                 if (maybeHeader) return;
