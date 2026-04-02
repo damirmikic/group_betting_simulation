@@ -8,7 +8,6 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 // --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
         let lockedScenarios = {}; // key: "team1||team2", value: 'home'|'draw'|'away'
-        let teamKnockoutStrengths = {}; // { team: { attack, defense }, _globalAvg: number }
         let currentLanguage = 'en';
 
         // --- Localization ---
@@ -896,77 +895,44 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         function getKnockoutLambdasFromElo(teamA, teamB) {
             const eloA = teamEloRatings[teamA] ?? 1500;
             const eloB = teamEloRatings[teamB] ?? 1500;
+            const eloDiff = eloA - eloB;
             const diffAbs = Math.abs(eloA - eloB);
             const pANoDraw = eloProbNoDraw(eloA, eloB);
             const pDraw = clamp(0.22 + 0.10 * Math.exp(-diffAbs / 260), 0.18, 0.33);
-            const pA = (1 - pDraw) * pANoDraw;
-            const pB = (1 - pDraw) * (1 - pANoDraw);
-            const totalGoals = 2.25 + Math.min(0.35, diffAbs / 1000);
-            const strengthA = pA + 0.5 * pDraw;
-            const strengthB = pB + 0.5 * pDraw;
-            let lambdaA = Math.max(0.05, totalGoals * (strengthA / (strengthA + strengthB)));
-            let lambdaB = Math.max(0.05, totalGoals * (strengthB / (strengthA + strengthB)));
+            const expectedStrengthA = pANoDraw + 0.5 * pDraw;
 
-            // Blend with Maher multiplicative model derived from group-stage market lambdas.
-            // Maher model: lambdaA = attack_A * (defense_B / globalAvg)
-            //   defense_B is goals conceded per game by B — a high value means a weak defence,
-            //   so A scores more; a low value means a strong defence, so A scores less.
-            //   Dividing by globalAvg normalises so that avg-attack vs avg-defence = globalAvg.
-            const sA = teamKnockoutStrengths[teamA];
-            const sB = teamKnockoutStrengths[teamB];
-            const globalAvg = teamKnockoutStrengths._globalAvg;
-            if (sA && sB && globalAvg > 0) {
-                // Knockout matches are played at neutral venues and are more cautious than group games
-                const knockoutFactor = 0.88;
-                const maherA = sA.attack * (sB.defense / globalAvg) * knockoutFactor;
-                const maherB = sB.attack * (sA.defense / globalAvg) * knockoutFactor;
-                // Weight: 65% market-derived Maher, 35% Elo — Elo guards against overfitting
-                // the small (3-match) group stage sample
-                const w = 0.65;
-                lambdaA = Math.max(0.05, w * maherA + (1 - w) * lambdaA);
-                lambdaB = Math.max(0.05, w * maherB + (1 - w) * lambdaB);
-            }
+            // Bayesian prior for neutral-site knockout scoring.
+            // We start from a cautious baseline and let Elo contribute matchup-specific evidence.
+            const priorTotalGoals = 2.35;
+            const priorShareA = 0.5;
+            const priorWeight = 8;
+
+            // Elo-derived evidence:
+            // 1) stronger mismatches tend to open total goals slightly
+            // 2) win strength tilts the goal share away from 50/50
+            const evidenceTotalGoals = 2.20 + Math.min(0.45, diffAbs / 700);
+            const shareTilt = (expectedStrengthA - 0.5) * 1.15;
+            const evidenceShareA = clamp(0.5 + shareTilt, 0.20, 0.80);
+            const evidenceWeight = 2 + Math.min(6, diffAbs / 60);
+
+            const posteriorTotalGoals =
+                ((priorTotalGoals * priorWeight) + (evidenceTotalGoals * evidenceWeight)) /
+                (priorWeight + evidenceWeight);
+            const posteriorShareA =
+                ((priorShareA * priorWeight) + (evidenceShareA * evidenceWeight)) /
+                (priorWeight + evidenceWeight);
+
+            // A small final Elo supremacy nudge keeps elite-vs-weak pairings from being too conservative
+            // after the Bayesian shrinkage, while preserving realistic floors for both teams.
+            const deltaAdjustment = clamp(eloDiff / 1200, -0.22, 0.22);
+            const lambdaA = Math.max(0.05, (posteriorTotalGoals * posteriorShareA) + deltaAdjustment);
+            const lambdaB = Math.max(0.05, posteriorTotalGoals - lambdaA);
 
             return { lambdaA, lambdaB, eloA, eloB };
         }
 
-        function buildKnockoutTeamStrengths() {
-            teamKnockoutStrengths = {};
-            const sumAttack = {}, sumDefense = {}, matchCount = {};
-
-            parsedMatches.forEach(m => {
-                if (!sumAttack[m.team1]) { sumAttack[m.team1] = 0; sumDefense[m.team1] = 0; matchCount[m.team1] = 0; }
-                if (!sumAttack[m.team2]) { sumAttack[m.team2] = 0; sumDefense[m.team2] = 0; matchCount[m.team2] = 0; }
-                sumAttack[m.team1] += m.lambda1;
-                sumDefense[m.team1] += m.lambda2;
-                matchCount[m.team1]++;
-                sumAttack[m.team2] += m.lambda2;
-                sumDefense[m.team2] += m.lambda1;
-                matchCount[m.team2]++;
-            });
-
-            const teams = Object.keys(sumAttack);
-            if (teams.length === 0) return;
-
-            // League-average goals per game (attack == defense by construction since goals are symmetric)
-            const globalAvg = teams.reduce((s, t) => s + sumAttack[t] / matchCount[t], 0) / teams.length;
-
-            // Bayesian shrinkage: blend each team's observed rates toward the global mean.
-            // Prior weight of 3 ghost matches prevents extreme values from small group samples.
-            const priorWeight = 3;
-            teams.forEach(t => {
-                const n = matchCount[t];
-                const w = n + priorWeight;
-                teamKnockoutStrengths[t] = {
-                    attack:  (sumAttack[t]  + globalAvg * priorWeight) / w,
-                    defense: (sumDefense[t] + globalAvg * priorWeight) / w
-                };
-            });
-            teamKnockoutStrengths._globalAvg = globalAvg;
-        }
-
         function simulateKnockoutMatch(teamA, teamB) {
-            const { lambdaA, lambdaB, eloA, eloB } = getKnockoutLambdasFromElo(teamA, teamB);
+            const { lambdaA, lambdaB } = getKnockoutLambdasFromElo(teamA, teamB);
             const gA90 = poissonRandom(lambdaA);
             const gB90 = poissonRandom(lambdaB);
             if (gA90 !== gB90) {
@@ -979,8 +945,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (gAET !== gBET) {
                 return { winner: gAET > gBET ? teamA : teamB, loser: gAET > gBET ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
             }
-            const penAProb = eloProbNoDraw(eloA, eloB);
-            const aWinsPens = Math.random() < penAProb;
+            const aWinsPens = Math.random() < 0.5;
             return { winner: aWinsPens ? teamA : teamB, loser: aWinsPens ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
         }
 
@@ -1194,9 +1159,6 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         });
 
         function runSimulation(numSims) {
-            // Precompute team attack/defense strength parameters from group-stage lambdas
-            // so getKnockoutLambdasFromElo can use the Maher model for knockout matches.
-            buildKnockoutTeamStrengths();
             const aggStats={};
             const advancementPreset = getSelectedAdvancementPreset();
             const autoQualifiersPerGroup = Math.max(0, advancementPreset.autoQualifiersPerGroup || 0);
