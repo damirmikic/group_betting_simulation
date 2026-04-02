@@ -91,6 +91,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const tournamentTeamSelectEl = document.getElementById('tournamentTeamSelect');
         const tournamentBookieMarginEl = document.getElementById('tournamentBookieMargin');
         const showTournamentTeamOddsButtonEl = document.getElementById('showTournamentTeamOddsButton');
+        const generateTournamentTeamCsvButtonEl = document.getElementById('generateTournamentTeamCsvButton');
+        const generateTournamentTeamCsvErrorEl = document.getElementById('generateTournamentTeamCsvError');
         const tournamentTeamOddsStatusEl = document.getElementById('tournamentTeamOddsStatus');
         const tournamentTeamOddsResultContentEl = document.getElementById('tournamentTeamOddsResultContent');
         const lambdaViewContentEl = document.getElementById('lambdaViewContent');
@@ -1666,6 +1668,130 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             });
         }
 
+        function getGroupKeyForTeam(teamName) {
+            return Object.entries(groupTeamNames || {}).find(([, teams]) => teams.includes(teamName))?.[0] || '';
+        }
+
+        function exportTeamCsv(groupKey, teamName, marginPercent, errorEl) {
+            const marginDecimal = marginPercent / 100;
+
+            if (!groupKey || !teamName) {
+                showInlineError(errorEl, 'Please select a group and a team first.');
+                return;
+            }
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                showInlineError(errorEl, 'Please enter a valid margin between 0 and 100.');
+                return;
+            }
+
+            const teamData = simulationAggStats[groupKey]?.[teamName];
+            if (!teamData) {
+                showInlineError(errorEl, 'No simulation data found for the selected team.');
+                return;
+            }
+            const knockoutData = simulationAggStats?._knockout?.teamProgress?.[teamName] || {};
+            const teamParsedMatches = parsedMatches.filter(match => match.group === groupKey && (match.team1 === teamName || match.team2 === teamName));
+            const xPtsReference = teamParsedMatches.reduce((sum, match) => {
+                if (match.team1 === teamName) return sum + (3 * match.p1) + match.px;
+                return sum + (3 * match.p2) + match.px;
+            }, 0);
+            const xGFReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda1 : match.lambda2), 0);
+            const xGAReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda2 : match.lambda1), 0);
+
+            const { date, time } = getCsvExportDateTime();
+
+            const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
+            const rows = [];
+            const addYesNoRow = (market, probability) => {
+                const row = [date, time, '', market, '', calculateOddWithMargin(probability, marginDecimal), '', '', '', '', '', '', ''];
+                rows.push(buildCsvRow(row));
+            };
+            const addLineRow = (market, line, values) => {
+                const { overProb, underProb } = getLineProbabilities(values, line);
+                const row = [date, time, '', market, '', '', '', '', line.toFixed(1), calculateOddWithMargin(underProb, marginDecimal), calculateOddWithMargin(overProb, marginDecimal), '', ''];
+                rows.push(buildCsvRow(row));
+            };
+            const addRangeYesNoRow = (market, values, predicate) => {
+                const probability = values.filter(predicate).length / currentNumSims;
+                addYesNoRow(market, probability);
+            };
+
+            let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
+            const matchNameRow = emptyRow();
+            matchNameRow[0] = 'MATCH_NAME:World Cup 2026';
+            csvContent += buildCsvRow(matchNameRow);
+            const leagueRow = emptyRow();
+            leagueRow[0] = `LEAGUE_NAME:${teamName}`;
+            csvContent += buildCsvRow(leagueRow);
+            csvContent += buildCsvRow(emptyRow());
+
+            addYesNoRow('Pobednik Grupe', (teamData.posCounts[0] || 0) / currentNumSims);
+            addYesNoRow('2. mesto u grupi', (teamData.posCounts[1] || 0) / currentNumSims);
+            addYesNoRow('3. mesto u grupi', (teamData.posCounts[2] || 0) / currentNumSims);
+            addYesNoRow('4. mesto u grupi', (teamData.posCounts[3] || 0) / currentNumSims);
+            addYesNoRow('prolazi grupu', (teamData.advanceToKnockoutCount || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/16 finala', (knockoutData.eliminateR32 || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/8 finala', (knockoutData.eliminateR16 || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/4 finala', (knockoutData.eliminateQF || 0) / currentNumSims);
+            addYesNoRow('eliminacija u 1/2 finala', (knockoutData.eliminateSF || 0) / currentNumSims);
+            addYesNoRow('eliminacija u finalu', (knockoutData.runnerUpCount || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/16 finala', (knockoutData.reachR32 || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/8 finala', (knockoutData.reachR16 || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/4 finala', (knockoutData.reachQF || 0) / currentNumSims);
+            addYesNoRow('dolazi do 1/2 finala', (knockoutData.reachSF || 0) / currentNumSims);
+            addYesNoRow('dolazi do finala', (knockoutData.reachFINAL || 0) / currentNumSims);
+
+            [0, 1, 2, 3, 4, 5, 6, 7, 9].forEach(points => {
+                addRangeYesNoRow(`${points} bodova u grupi`, teamData.ptsSims, value => value === points);
+            });
+            addRangeYesNoRow('1-3 boda u grupi', teamData.ptsSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow('2-4 boda u grupi', teamData.ptsSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow('4-6 bodova u grupi', teamData.ptsSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow('7+ bodova u grupi', teamData.ptsSims, value => value >= 7);
+
+            buildDynamicHalfPointLines(teamData.ptsSims, xPtsReference).forEach((line, idx) => {
+                addLineRow(`osvojenih bodova u grupi${idx + 1}`, line, teamData.ptsSims);
+            });
+            buildDynamicHalfPointLines(teamData.gfSims, xGFReference).forEach((line, idx) => {
+                addLineRow(`datih golova u grupi${idx + 1}`, line, teamData.gfSims);
+            });
+
+            addRangeYesNoRow('1-2 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 2);
+            addRangeYesNoRow('1-3 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow('2-4 datih golova u grupi', teamData.gfSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow('4-6 datih golova u grupi', teamData.gfSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow('5-7 datih golova u grupi', teamData.gfSims, value => value >= 5 && value <= 7);
+
+            buildDynamicHalfPointLines(teamData.gaSims, xGAReference).forEach((line, idx) => {
+                addLineRow(`primljenih golova u grupi${idx + 1}`, line, teamData.gaSims);
+            });
+
+            addYesNoRow('Najvise datih golova na turniru', (knockoutData.mostTournamentGFCount || 0) / currentNumSims);
+            addYesNoRow('Najvise primljenih golova na turniru', (knockoutData.mostTournamentGACount || 0) / currentNumSims);
+            addYesNoRow('Daje gol na svakoj utakmici u grupi', (teamData.scoreEveryGroupGameCount || 0) / currentNumSims);
+
+            const winLine = findBalancedHalfPointLine(teamData.winsSims, average(teamData.winsSims));
+            addLineRow('broj pobeda u grupi', winLine, teamData.winsSims);
+            const drawLine = findBalancedHalfPointLine(teamData.drawsSims, average(teamData.drawsSims));
+            addLineRow('broj neresenih u grupi', drawLine, teamData.drawsSims);
+            const tournamentGoalsLine = findBalancedHalfPointLine(knockoutData.tournamentGfSims || [], average(knockoutData.tournamentGfSims || []));
+            addLineRow('broj datih golova na turniru', tournamentGoalsLine, knockoutData.tournamentGfSims || []);
+
+            csvContent += rows.join('');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `team_markets_${teamName.replace(/\s+/g, '_')}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
         function renderOverUnderRows(values, lines, marginDecimal) {
             if (!values || values.length === 0 || currentNumSims === 0) return '<p class="text-xs text-gray-500">No data.</p>';
             let html = `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Line</th><th>Over</th><th>Under</th><th>Over %</th><th>Under %</th></tr></thead><tbody>`;
@@ -1716,6 +1842,10 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 customProbInputsContainerEl.classList.add('hidden');
                 generateTeamCsvButtonEl.disabled = true;
             }
+        });
+
+        tournamentTeamSelectEl.addEventListener('change', () => {
+            generateTournamentTeamCsvButtonEl.disabled = !tournamentTeamSelectEl.value;
         });
         
         showSimulatedOddsButtonEl.addEventListener('click', () => { 
@@ -1985,6 +2115,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             simulatedOddsStatusEl.textContent = "";
             customProbInputsContainerEl.classList.add('hidden');
             customProbAndOddResultAreaEl.innerHTML = "Custom prop odds will appear here...";
+            generateTeamCsvButtonEl.disabled = true;
+            generateTournamentTeamCsvButtonEl.disabled = true;
             // Clear O/U sections
             document.getElementById('ouTotalGroupGoalsResult').innerHTML = '';
             document.getElementById('expectedTotalGroupGoals').textContent = '';
@@ -2173,126 +2305,12 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
         });
 
         generateTeamCsvButtonEl.addEventListener('click', () => {
-            const groupKey = simGroupSelectEl.value;
-            const teamName = simTeamSelectEl.value;
-            const marginPercent = parseFloat(simBookieMarginEl.value);
-            const marginDecimal = marginPercent / 100;
-            
-            if (!groupKey || !teamName) {
-                showInlineError(generateTeamCsvErrorEl, 'Please select a group and a team first.');
-                return;
-            }
-            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
-                showInlineError(generateTeamCsvErrorEl, 'Please enter a valid margin between 0 and 100.');
-                return;
-            }
+            exportTeamCsv(simGroupSelectEl.value, simTeamSelectEl.value, parseFloat(simBookieMarginEl.value), generateTeamCsvErrorEl);
+        });
 
-            const teamData = simulationAggStats[groupKey]?.[teamName];
-            if (!teamData) {
-                showInlineError(generateTeamCsvErrorEl, 'No simulation data found for the selected team.');
-                return;
-            }
-            const knockoutData = simulationAggStats?._knockout?.teamProgress?.[teamName] || {};
-            const teamParsedMatches = parsedMatches.filter(match => match.group === groupKey && (match.team1 === teamName || match.team2 === teamName));
-            const xPtsReference = teamParsedMatches.reduce((sum, match) => {
-                if (match.team1 === teamName) return sum + (3 * match.p1) + match.px;
-                return sum + (3 * match.p2) + match.px;
-            }, 0);
-            const xGFReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda1 : match.lambda2), 0);
-            const xGAReference = teamParsedMatches.reduce((sum, match) => sum + (match.team1 === teamName ? match.lambda2 : match.lambda1), 0);
-
-            const { date, time } = getCsvExportDateTime();
-
-            const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
-            const rows = [];
-            const addYesNoRow = (market, probability) => {
-                const row = [date, time, '', market, '', calculateOddWithMargin(probability, marginDecimal), '', '', '', '', '', '', ''];
-                rows.push(buildCsvRow(row));
-            };
-            const addLineRow = (market, line, values) => {
-                const { overProb, underProb } = getLineProbabilities(values, line);
-                const row = [date, time, '', market, '', '', '', '', line.toFixed(1), calculateOddWithMargin(underProb, marginDecimal), calculateOddWithMargin(overProb, marginDecimal), '', ''];
-                rows.push(buildCsvRow(row));
-            };
-            const addRangeYesNoRow = (market, values, predicate) => {
-                const probability = values.filter(predicate).length / currentNumSims;
-                addYesNoRow(market, probability);
-            };
-
-            let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
-            const matchNameRow = emptyRow();
-            matchNameRow[0] = 'MATCH_NAME:World Cup 2026';
-            csvContent += buildCsvRow(matchNameRow);
-            const leagueRow = emptyRow();
-            leagueRow[0] = `LEAGUE_NAME:${teamName}`;
-            csvContent += buildCsvRow(leagueRow);
-            csvContent += buildCsvRow(emptyRow());
-
-            addYesNoRow('Pobednik Grupe', (teamData.posCounts[0] || 0) / currentNumSims);
-            addYesNoRow('2. mesto u grupi', (teamData.posCounts[1] || 0) / currentNumSims);
-            addYesNoRow('3. mesto u grupi', (teamData.posCounts[2] || 0) / currentNumSims);
-            addYesNoRow('4. mesto u grupi', (teamData.posCounts[3] || 0) / currentNumSims);
-            addYesNoRow('prolazi grupu', (teamData.advanceToKnockoutCount || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/16 finala', (knockoutData.eliminateR32 || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/8 finala', (knockoutData.eliminateR16 || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/4 finala', (knockoutData.eliminateQF || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/2 finala', (knockoutData.eliminateSF || 0) / currentNumSims);
-            addYesNoRow('eliminacija u finalu', (knockoutData.runnerUpCount || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/16 finala', (knockoutData.reachR32 || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/8 finala', (knockoutData.reachR16 || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/4 finala', (knockoutData.reachQF || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/2 finala', (knockoutData.reachSF || 0) / currentNumSims);
-            addYesNoRow('dolazi do finala', (knockoutData.reachFINAL || 0) / currentNumSims);
-
-            [0, 1, 2, 3, 4, 5, 6, 7, 9].forEach(points => {
-                addRangeYesNoRow(`${points} bodova u grupi`, teamData.ptsSims, value => value === points);
-            });
-            addRangeYesNoRow('1-3 boda u grupi', teamData.ptsSims, value => value >= 1 && value <= 3);
-            addRangeYesNoRow('2-4 boda u grupi', teamData.ptsSims, value => value >= 2 && value <= 4);
-            addRangeYesNoRow('4-6 bodova u grupi', teamData.ptsSims, value => value >= 4 && value <= 6);
-            addRangeYesNoRow('7+ bodova u grupi', teamData.ptsSims, value => value >= 7);
-
-            buildDynamicHalfPointLines(teamData.ptsSims, xPtsReference).forEach((line, idx) => {
-                addLineRow(`osvojenih bodova u grupi${idx + 1}`, line, teamData.ptsSims);
-            });
-            buildDynamicHalfPointLines(teamData.gfSims, xGFReference).forEach((line, idx) => {
-                addLineRow(`datih golova u grupi${idx + 1}`, line, teamData.gfSims);
-            });
-
-            addRangeYesNoRow('1-2 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 2);
-            addRangeYesNoRow('1-3 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 3);
-            addRangeYesNoRow('2-4 datih golova u grupi', teamData.gfSims, value => value >= 2 && value <= 4);
-            addRangeYesNoRow('4-6 datih golova u grupi', teamData.gfSims, value => value >= 4 && value <= 6);
-            addRangeYesNoRow('5-7 datih golova u grupi', teamData.gfSims, value => value >= 5 && value <= 7);
-
-            buildDynamicHalfPointLines(teamData.gaSims, xGAReference).forEach((line, idx) => {
-                addLineRow(`primljenih golova u grupi${idx + 1}`, line, teamData.gaSims);
-            });
-
-            addYesNoRow('Najvise datih golova na turniru', (knockoutData.mostTournamentGFCount || 0) / currentNumSims);
-            addYesNoRow('Najvise primljenih golova na turniru', (knockoutData.mostTournamentGACount || 0) / currentNumSims);
-            addYesNoRow('Daje gol na svakoj utakmici u grupi', (teamData.scoreEveryGroupGameCount || 0) / currentNumSims);
-
-            const winLine = findBalancedHalfPointLine(teamData.winsSims, average(teamData.winsSims));
-            addLineRow('broj pobeda u grupi', winLine, teamData.winsSims);
-            const drawLine = findBalancedHalfPointLine(teamData.drawsSims, average(teamData.drawsSims));
-            addLineRow('broj neresenih u grupi', drawLine, teamData.drawsSims);
-            const tournamentGoalsLine = findBalancedHalfPointLine(knockoutData.tournamentGfSims || [], average(knockoutData.tournamentGfSims || []));
-            addLineRow('broj datih golova na turniru', tournamentGoalsLine, knockoutData.tournamentGfSims || []);
-
-            csvContent += rows.join('');
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            if (link.download !== undefined) { 
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute("download", `team_markets_${teamName.replace(/\s+/g, '_')}.csv`);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
+        generateTournamentTeamCsvButtonEl.addEventListener('click', () => {
+            const teamName = tournamentTeamSelectEl.value;
+            exportTeamCsv(getGroupKeyForTeam(teamName), teamName, parseFloat(tournamentBookieMarginEl.value), generateTournamentTeamCsvErrorEl);
         });
 
         generateGroupCsvButtonEl.addEventListener('click', () => {
