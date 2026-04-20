@@ -276,9 +276,10 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'wins', 'name']
             },
             fifa_competition: {
-                label: "FIFA-style (GD before H2H)",
-                description: "Pts → GD → GF → H2H Pts → H2H GD → H2H GF → Wins → Team name",
-                criteriaAfterPoints: ['gd', 'gf', 'h2hPts', 'h2hGd', 'h2hGf', 'wins', 'name']
+                label: "FIFA World Cup (H2H then overall)",
+                description: "Pts → H2H Pts → H2H GD → H2H GF → [recursive H2H] → GD → GF → Team name",
+                criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'name'],
+                recursiveH2H: true
             },
             domestic_standard: {
                 label: "League standard (Pts/GD/GF)",
@@ -1521,6 +1522,32 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             return teamA.name.localeCompare(teamB.name);
         }
 
+        function teamsEqualOnCriteria(teamA, teamB, criteria, h2hStats) {
+            for (const criterion of criteria) {
+                if (criterion === 'name') continue;
+                const sourceA = criterion.startsWith('h2h') ? (h2hStats?.[teamA.name] || {}) : teamA;
+                const sourceB = criterion.startsWith('h2h') ? (h2hStats?.[teamB.name] || {}) : teamB;
+                if ((sourceA[criterion] || 0) !== (sourceB[criterion] || 0)) return false;
+            }
+            return true;
+        }
+
+        function groupIntoBuckets(sortedTeams, criteria, h2hStats) {
+            const buckets = [];
+            let i = 0;
+            while (i < sortedTeams.length) {
+                const bucket = [sortedTeams[i]];
+                let j = i + 1;
+                while (j < sortedTeams.length && teamsEqualOnCriteria(sortedTeams[i], sortedTeams[j], criteria, h2hStats)) {
+                    bucket.push(sortedTeams[j]);
+                    j++;
+                }
+                buckets.push(bucket);
+                i = j;
+            }
+            return buckets;
+        }
+
         function sortStandingsWithTieBreakers(teams, simulatedMatches, selectedPreset) {
             const preset = selectedPreset || tieBreakRulePresets.uefa_competition;
             const criteriaAfterPoints = preset.criteriaAfterPoints || ['gd', 'gf', 'wins', 'name'];
@@ -1541,10 +1568,43 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
                 if (tiedSegment.length > 1) {
                     const teamNames = tiedSegment.map(t => t.name);
-                    const h2hStats = computeHeadToHeadStatsForTeams(teamNames, simulatedMatches);
-                    tiedSegment.sort((a, b) => compareTeamsByCriteria(a, b, criteriaAfterPoints, h2hStats));
+
+                    if (preset.recursiveH2H) {
+                        const h2hCriteria = criteriaAfterPoints.filter(c => c.startsWith('h2h'));
+                        const overallCriteria = criteriaAfterPoints.filter(c => !c.startsWith('h2h'));
+                        const h2hStats = computeHeadToHeadStatsForTeams(teamNames, simulatedMatches);
+
+                        tiedSegment.sort((a, b) => compareTeamsByCriteria(a, b, [...h2hCriteria, 'name'], h2hStats));
+                        const phase1Buckets = groupIntoBuckets(tiedSegment, h2hCriteria, h2hStats);
+
+                        for (const bucket of phase1Buckets) {
+                            if (bucket.length === 1) {
+                                ranked.push(bucket[0]);
+                            } else if (bucket.length < tiedSegment.length) {
+                                // Recursive: re-apply H2H among just this still-tied sub-group
+                                const subH2hStats = computeHeadToHeadStatsForTeams(bucket.map(t => t.name), simulatedMatches);
+                                bucket.sort((a, b) => compareTeamsByCriteria(a, b, [...h2hCriteria, 'name'], subH2hStats));
+                                const phase2Buckets = groupIntoBuckets(bucket, h2hCriteria, subH2hStats);
+                                for (const subBucket of phase2Buckets) {
+                                    if (subBucket.length === 1) {
+                                        ranked.push(subBucket[0]);
+                                    } else {
+                                        ranked.push(...[...subBucket].sort((a, b) => compareTeamsByCriteria(a, b, overallCriteria, {})));
+                                    }
+                                }
+                            } else {
+                                // All tied teams equal on H2H — skip recursive step, use overall criteria
+                                ranked.push(...[...bucket].sort((a, b) => compareTeamsByCriteria(a, b, overallCriteria, {})));
+                            }
+                        }
+                    } else {
+                        const h2hStats = computeHeadToHeadStatsForTeams(teamNames, simulatedMatches);
+                        tiedSegment.sort((a, b) => compareTeamsByCriteria(a, b, criteriaAfterPoints, h2hStats));
+                        ranked.push(...tiedSegment);
+                    }
+                } else {
+                    ranked.push(...tiedSegment);
                 }
-                ranked.push(...tiedSegment);
                 idx = nextIdx;
             }
             return ranked;
