@@ -2066,9 +2066,41 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const totalWinnerImpliedProbability = winnerSelections.reduce((sum, selection) => sum + selection.impliedProbability, 0);
             const totalWinnerMarginPercent = (totalWinnerImpliedProbability - 1) * 100;
 
+            let winnerSortCol = 'winProbability';
+            let winnerSortDir = -1;
+
+            const renderWinnerOddsTable = () => {
+                const sorted = [...winnerSelections].sort((a, b) => {
+                    if (winnerSortCol === 'teamName') return winnerSortDir * a.teamName.localeCompare(b.teamName);
+                    const aVal = winnerSortCol === 'winnerOdd' ? (a.winnerOdd === 'N/A' ? Infinity : Number(a.winnerOdd)) : a[winnerSortCol];
+                    const bVal = winnerSortCol === 'winnerOdd' ? (b.winnerOdd === 'N/A' ? Infinity : Number(b.winnerOdd)) : b[winnerSortCol];
+                    return winnerSortDir * (aVal - bVal);
+                });
+                const tbody = document.getElementById('winner-odds-tbody');
+                if (!tbody) return;
+                tbody.innerHTML = sorted.map(({ teamName, winProbability, winnerOdd }) =>
+                    `<tr><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`
+                ).join('');
+                document.querySelectorAll('#winner-odds-table th[data-col]').forEach(th => {
+                    const ind = th.querySelector('.sort-ind');
+                    if (ind) ind.textContent = th.dataset.col === winnerSortCol ? (winnerSortDir === 1 ? ' ↑' : ' ↓') : '';
+                });
+            };
+
+            const attachWinnerTableSort = () => {
+                document.querySelectorAll('#winner-odds-table th[data-col]').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const col = th.dataset.col;
+                        if (winnerSortCol === col) { winnerSortDir *= -1; }
+                        else { winnerSortCol = col; winnerSortDir = col === 'teamName' ? 1 : -1; }
+                        renderWinnerOddsTable();
+                    });
+                });
+            };
+
             let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Tournament Winner Odds (Margin: ${marginPercent}%)</h3>`;
-            html += `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Selection</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            winnerSelections.forEach(({ teamName, winProbability, winnerOdd }) => {
+            html += `<table id="winner-odds-table" class="odds-table text-xs sm:text-sm"><thead><tr><th data-col="teamName" class="cursor-pointer select-none">Selection<span class="sort-ind"></span></th><th data-col="winProbability" class="cursor-pointer select-none">Prob<span class="sort-ind"> ↓</span></th><th data-col="winnerOdd" class="cursor-pointer select-none">Odd<span class="sort-ind"></span></th></tr></thead><tbody id="winner-odds-tbody">`;
+            [...winnerSelections].sort((a, b) => b.winProbability - a.winProbability).forEach(({ teamName, winProbability, winnerOdd }) => {
                 html += `<tr><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`;
             });
             html += `</tbody></table>`;
@@ -2077,6 +2109,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (!team) {
                 html += `<p class="text-xs text-gray-500">Tip: select a team to also view team-specific knockout and tournament totals markets.</p>`;
                 tournamentTeamOddsResultContentEl.innerHTML = html;
+                attachWinnerTableSort();
                 return;
             }
 
@@ -2084,6 +2117,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (!stats) {
                 html += `<p class="text-xs text-red-500">No team-level knockout/tournament stats available for ${team}.</p>`;
                 tournamentTeamOddsResultContentEl.innerHTML = html;
+                attachWinnerTableSort();
                 return;
             }
 
@@ -2113,6 +2147,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             html += renderOverUnderRows(stats.tournamentGamesSims, [2.5, 3.5, 4.5, 5.5, 6.5], marginDecimal);
 
             tournamentTeamOddsResultContentEl.innerHTML = html;
+            attachWinnerTableSort();
         });
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
