@@ -8,6 +8,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 // --- Global Variables ---
         let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
         let lockedScenarios = {}; // key: "team1||team2", value: { g1, g2 }
+        let currentDCRho = 0;
         let currentLanguage = 'en';
 
         // --- Localization ---
@@ -436,6 +437,46 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             return k - 1;
         }
         
+        function dixonColesToCorrection(i, j, lambda1, lambda2, rho) {
+            if (rho === 0) return 1;
+            if (i === 0 && j === 0) return 1 - lambda1 * lambda2 * rho;
+            if (i === 1 && j === 0) return 1 + lambda2 * rho;
+            if (i === 0 && j === 1) return 1 + lambda1 * rho;
+            if (i === 1 && j === 1) return 1 - rho;
+            return 1;
+        }
+
+        function buildDixonColesCDF(lambda1, lambda2, rho) {
+            const MAX_G = 10;
+            const n = MAX_G + 1;
+            const pmf1 = new Float64Array(n);
+            const pmf2 = new Float64Array(n);
+            for (let k = 0; k < n; k++) {
+                pmf1[k] = poissonPMF(lambda1, k);
+                pmf2[k] = poissonPMF(lambda2, k);
+            }
+            const cdf = new Float64Array(n * n);
+            let cumulative = 0;
+            let idx = 0;
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    const tau = dixonColesToCorrection(i, j, lambda1, lambda2, rho);
+                    cumulative += Math.max(0, pmf1[i] * pmf2[j] * tau);
+                    cdf[idx++] = cumulative;
+                }
+            }
+            return { cdf, total: cumulative, n };
+        }
+
+        function sampleDixonColes(dcCDF) {
+            const { cdf, total, n } = dcCDF;
+            const target = Math.random() * total;
+            for (let k = 0; k < cdf.length; k++) {
+                if (cdf[k] >= target) return [Math.floor(k / n), k % n];
+            }
+            return [n - 1, n - 1];
+        }
+
         function calculateModelProbsFromXG(homeXG, awayXG, goalLine = 2.5) {
             let probHomeWin = 0, probAwayWin = 0, probDraw = 0;
             let probUnder = 0, probOver = 0;
@@ -987,8 +1028,13 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         function simulateKnockoutMatch(teamA, teamB) {
             const { lambdaA, lambdaB } = getKnockoutLambdasFromElo(teamA, teamB);
-            const gA90 = poissonRandom(lambdaA);
-            const gB90 = poissonRandom(lambdaB);
+            let gA90, gB90;
+            if (currentDCRho !== 0) {
+                [gA90, gB90] = sampleDixonColes(buildDixonColesCDF(lambdaA, lambdaB, currentDCRho));
+            } else {
+                gA90 = poissonRandom(lambdaA);
+                gB90 = poissonRandom(lambdaB);
+            }
             if (gA90 !== gB90) {
                 return { winner: gA90 > gB90 ? teamA : teamB, loser: gA90 > gB90 ? teamB : teamA, goalsA: gA90, goalsB: gB90 };
             }
@@ -1214,6 +1260,25 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         function runSimulation(numSims) {
             const aggStats={};
+
+            // Dixon-Coles correction setup
+            const dcEnabledEl = document.getElementById('dixonColesEnabled');
+            const dcRhoEl = document.getElementById('dixonColesRho');
+            currentDCRho = (dcEnabledEl && dcEnabledEl.checked) ? (parseFloat(dcRhoEl.value) || 0) : 0;
+
+            // Precompute CDF table per unique (lambda1, lambda2) pair
+            const dcCDFCache = new Map();
+            if (currentDCRho !== 0) {
+                for (const gK in groupedMatches) {
+                    for (const m of groupedMatches[gK]) {
+                        const key = `${m.lambda1}:${m.lambda2}`;
+                        if (!dcCDFCache.has(key)) {
+                            dcCDFCache.set(key, buildDixonColesCDF(m.lambda1, m.lambda2, currentDCRho));
+                        }
+                    }
+                }
+            }
+
             const advancementPreset = getSelectedAdvancementPreset();
             const autoQualifiersPerGroup = Math.max(0, advancementPreset.autoQualifiersPerGroup || 0);
             const bestThirdSlots = Math.max(0, advancementPreset.bestThirdSlots || 0);
@@ -1264,6 +1329,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                         if (lockOutcome) {
                             const locked = simulateLockedMatch(m, lockOutcome);
                             g1 = locked.g1; g2 = locked.g2;
+                        } else if (currentDCRho !== 0) {
+                            const dcKey = `${m.lambda1}:${m.lambda2}`;
+                            [g1, g2] = sampleDixonColes(dcCDFCache.get(dcKey));
                         } else {
                             g1 = poissonRandom(m.lambda1);
                             g2 = poissonRandom(m.lambda2);
