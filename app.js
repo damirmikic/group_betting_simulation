@@ -276,9 +276,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'wins', 'name']
             },
             fifa_competition: {
-                label: "FIFA-style (GD before H2H)",
-                description: "Pts → GD → GF → H2H Pts → H2H GD → H2H GF → Wins → Team name",
-                criteriaAfterPoints: ['gd', 'gf', 'h2hPts', 'h2hGd', 'h2hGf', 'wins', 'name']
+                label: "FIFA World Cup (H2H then overall)",
+                description: "Pts → H2H Pts → H2H GD → H2H GF → GD → GF → Team name",
+                criteriaAfterPoints: ['h2hPts', 'h2hGd', 'h2hGf', 'gd', 'gf', 'name']
             },
             domestic_standard: {
                 label: "League standard (Pts/GD/GF)",
