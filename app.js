@@ -512,43 +512,57 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, awayPrice) {
             const normalisedUnder = (1 / underPrice) / ((1 / overPrice) + (1 / underPrice));
             const normalisedHomeNoDraw = (1 / homePrice) / ((1 / awayPrice) + (1 / homePrice));
-            const tol = 1e-7;
-            const maxIter = 100;
+            const tol = 1e-9;
+            const maxIter = 150;
 
-            // Stage 1: bisect on totalGoals (with supremacy=0) to match P(under 2.5).
-            // P(under 2.5) is monotone DECREASING in totalGoals, so this always converges.
-            let lo1 = 0.05, hi1 = 22.0;
             let totalGoals = 2.5;
-            for (let iter = 0; iter < maxIter; iter++) {
-                totalGoals = (lo1 + hi1) / 2;
-                const xg = totalGoals / 2;
-                const p = calculateModelProbsFromXG(xg, xg, 2.5);
-                if (Math.abs(p.modelProbUnderNoExact - normalisedUnder) < tol) break;
-                // P(under) too high → need more goals to push probability down
-                if (p.modelProbUnderNoExact > normalisedUnder) lo1 = totalGoals;
-                else hi1 = totalGoals;
-            }
-
-            // Stage 2: bisect on supremacy to match P(home wins no draw).
-            // P(home wins no draw) is monotone INCREASING in supremacy, so this always converges.
-            const maxSupremacy = totalGoals - 0.02;
-            let lo2 = -maxSupremacy, hi2 = maxSupremacy;
             let supremacy = 0;
-            let homeExpectedGoals = totalGoals / 2, awayExpectedGoals = totalGoals / 2;
-            let finalError = 0;
-            for (let iter = 0; iter < maxIter; iter++) {
-                supremacy = (lo2 + hi2) / 2;
+            let homeExpectedGoals = 1.25, awayExpectedGoals = 1.25;
+            let jointError = Infinity;
+
+            // Joint 2D refinement: alternate between totalGoals (stage 1) and supremacy (stage 2)
+            // using the latest estimate from the other stage on each pass, until both constraints
+            // converge simultaneously. Converges in 1-2 outer iterations for typical inputs.
+            for (let outer = 0; outer < 8; outer++) {
+                // Stage 1: bisect on totalGoals using current supremacy to match P(under 2.5).
+                // P(under 2.5) is monotone DECREASING in totalGoals.
+                let lo1 = 0.05, hi1 = 22.0;
+                for (let iter = 0; iter < maxIter; iter++) {
+                    totalGoals = (lo1 + hi1) / 2;
+                    const hxg = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+                    const axg = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+                    const p = calculateModelProbsFromXG(hxg, axg, 2.5);
+                    if (Math.abs(p.modelProbUnderNoExact - normalisedUnder) < tol) break;
+                    if (p.modelProbUnderNoExact > normalisedUnder) lo1 = totalGoals;
+                    else hi1 = totalGoals;
+                }
+
+                // Stage 2: bisect on supremacy with updated totalGoals to match P(home wins no draw).
+                // P(home wins no draw) is monotone INCREASING in supremacy.
+                const maxSupremacy = totalGoals - 0.02;
+                let lo2 = -maxSupremacy, hi2 = maxSupremacy;
+                for (let iter = 0; iter < maxIter; iter++) {
+                    supremacy = (lo2 + hi2) / 2;
+                    const hxg = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+                    const axg = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+                    const p = calculateModelProbsFromXG(hxg, axg, 2.5);
+                    const err = p.modelProbHomeWinNoDraw - normalisedHomeNoDraw;
+                    if (Math.abs(err) < tol) break;
+                    if (err > 0) hi2 = supremacy;
+                    else lo2 = supremacy;
+                }
+
+                // Check joint convergence against both constraints simultaneously.
                 homeExpectedGoals = Math.max(0.01, totalGoals / 2 + supremacy / 2);
                 awayExpectedGoals = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-                const p = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                const err = p.modelProbHomeWinNoDraw - normalisedHomeNoDraw;
-                finalError = Math.abs(err);
-                if (finalError < tol) break;
-                if (err > 0) hi2 = supremacy;
-                else lo2 = supremacy;
+                const pFinal = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
+                const underErr = Math.abs(pFinal.modelProbUnderNoExact - normalisedUnder);
+                const homeErr = Math.abs(pFinal.modelProbHomeWinNoDraw - normalisedHomeNoDraw);
+                jointError = Math.max(underErr, homeErr);
+                if (jointError < tol * 1000) break;
             }
 
-            const converged = finalError < 0.001;
+            const converged = jointError < 0.001;
             return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals, converged };
         }
 
