@@ -2369,77 +2369,77 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         // --- Initial Sample Data ---
         inputModeEl.value = 'hybrid';
         matchDataEl.value = `A	Mexico	vs	South Africa	1.52	4.07	5.99	1.87	1.92
-A	South Korea	vs	Czech Republic	2.58	3.18	2.70	1.67	2.20
-B	Canada	vs	Bosnia and Herzegovina	2.25	3.40	3.02	1.73	2.10
-B	Qatar	vs	Switzerland	8.50	5.65	1.30	2.23	1.62
-C	Haiti	vs	Scotland	6.58	5.20	1.38	2.07	1.74
-C	Brazil	vs	Morocco	1.60	3.75	5.70	1.92	1.87
-D	USA	vs	Paraguay	1.90	3.70	3.70	1.81	1.99
-D	Australia	vs	Turkey	4.75	3.80	1.62	1.73	2.10
-E	Germany	vs	Curaçao	1.02	21.00	41.00	5.00	1.17
-E	Ivory Coast	vs	Ecuador	3.20	2.77	2.46	1.51	2.50
-F	Netherlands	vs	Japan	2.02	3.44	3.61	1.90	1.90
-F	Sweden	vs	Tunisia	1.83	3.50	3.80	1.67	2.20
-G	Belgium	vs	Egypt	1.52	4.42	5.40	2.08	1.73
-G	Iran	vs	New Zealand	1.77	3.60	4.25	1.73	2.10
-H	Spain	vs	Cape Verde	1.06	11.00	23.00	3.40	1.33
-H	Saudi Arabia	vs	Uruguay	5.40	3.85	1.60	1.85	1.95
-I	France	vs	Senegal	1.40	4.68	7.12	2.10	1.72
-I	Iraq	vs	Norway	6.00	4.50	1.40	2.15	1.65
+A	South Korea	vs	Czech Republic	2.58	3.18	2.7	1.67	2.2
+B	Canada	vs	Bosnia and Herzegovina	1.93	3.64	4.25	1.67	2.15
+B	Qatar	vs	Switzerland	8.5	5.65	1.3	2.23	1.62
+C	Haiti	vs	Scotland	6.58	5.2	1.38	2.07	1.74
+C	Brazil	vs	Morocco	1.5	4	6	1.9	1.9
+D	USA	vs	Paraguay	1.9	3.7	3.7	1.81	1.99
+D	Australia	vs	Turkey	4	3.5	1.9	1.73	2.1
+E	Germany	vs	Curaçao	1.02	21	41	5	1.17
+E	Ivory Coast	vs	Ecuador	3.3	2.9	2.4	1.51	2.5
+F	Netherlands	vs	Japan	2.02	3.44	3.61	1.9	1.9
+F	Sweden	vs	Tunisia	1.9	3.35	4	1.62	2.25
+G	Belgium	vs	Egypt	1.61	4.05	5	2	1.77
+G	Iran	vs	New Zealand	1.77	3.6	4.25	1.73	2.1
+H	Spain	vs	Cape Verde	1.06	11	23	3.4	1.33
+H	Saudi Arabia	vs	Uruguay	5.4	3.85	1.6	1.85	1.95
+I	France	vs	Senegal	1.4	4.68	7.12	2	1.8
+I	Iraq	vs	Norway	7.6	5.36	1.32	2.25	1.62
 J	Argentina	vs	Algeria	1.42	4.22	7.85	1.91	1.88
 J	Austria	vs	Jordan	1.35	5.06	7.75	2.25	1.62
-K	Portugal	vs	DR Congo	1.33	4.75	8.00	2.30	1.60
-K	Uzbekistan	vs	Colombia	7.00	4.12	1.46	1.93	1.87
+K	Portugal	vs	DR Congo	1.33	4.75	8	2.3	1.6
+K	Uzbekistan	vs	Colombia	7.45	4	1.41	1.96	1.82
 L	England	vs	Croatia	1.62	4.03	4.96	1.87	1.92
-L	Ghana	vs	Panama	2.03	3.79	3.28	1.80	2.00
-A	Czech Republic	vs	South Africa	1.83	4.35	4.44	2.15	1.65
-A	Mexico	vs	South Korea	1.98	4.17	3.92	2.20	1.62
-B	Switzerland	vs	Bosnia and Herzegovina	1.47	5.56	7.14	1.85	1.95
-B	Canada	vs	Qatar	1.53	5.26	6.45	1.90	1.90
-C	Brazil	vs	Haiti	1.04	40.00	100.00	1.35	3.15
-C	Scotland	vs	Morocco	4.00	4.17	1.96	2.20	1.62
-D	Turkey	vs	Paraguay	1.86	4.31	4.35	2.15	1.65
-D	USA	vs	Australia	1.53	5.26	6.45	1.90	1.90
-E	Germany	vs	Ivory Coast	1.35	6.45	9.52	1.75	2.05
-E	Ecuador	vs	Curaçao	1.14	12.50	25.00	1.55	2.45
-F	Netherlands	vs	Sweden	1.41	5.88	8.33	1.80	2.00
-F	Tunisia	vs	Japan	9.09	6.25	1.37	1.75	2.05
-G	Belgium	vs	Iran	1.40	6.06	8.33	1.80	2.00
-G	New Zealand	vs	Egypt	5.56	5.00	1.61	2.00	1.75
-H	Spain	vs	Saudi Arabia	1.04	33.33	100.00	1.35	3.15
-H	Uruguay	vs	Cape Verde	1.23	8.33	14.30	1.65	2.20
-I	Norway	vs	Senegal	1.65	4.76	5.41	2.05	1.70
-I	France	vs	Iraq	1.05	28.60	100.00	1.40	2.90
-J	Argentina	vs	Austria	1.20	9.09	18.20	1.60	2.30
-J	Jordan	vs	Algeria	6.06	5.13	1.56	1.95	1.85
-K	Portugal	vs	Uzbekistan	1.08	20.00	50.00	1.45	2.70
-K	Colombia	vs	DR Congo	1.18	9.52	20.00	1.60	2.30
-L	England	vs	Ghana	1.08	18.20	50.00	1.45	2.70
-L	Panama	vs	Croatia	10.00	6.67	1.33	1.70	2.10
-A	South Africa	vs	South Korea	4.76	4.44	1.77	2.10	1.70
-A	Czech Republic	vs	Mexico	4.35	4.26	1.87	2.15	1.65
-B	Switzerland	vs	Canada	1.82	4.35	4.55	2.10	1.70
-B	Bosnia and Herzegovina	vs	Qatar	1.92	4.26	4.08	2.15	1.65
-C	Scotland	vs	Brazil	15.40	9.09	1.21	1.65	2.20
-C	Morocco	vs	Haiti	1.16	11.10	20.00	1.55	2.45
-D	Australia	vs	Paraguay	3.23	4.00	2.27	2.25	1.60
-D	Turkey	vs	USA	3.03	3.92	2.41	2.30	1.55
-E	Ecuador	vs	Germany	5.88	5.13	1.57	1.95	1.85
-E	Curaçao	vs	Ivory Coast	14.30	8.33	1.23	1.65	2.20
-F	Tunisia	vs	Netherlands	16.70	9.09	1.20	1.60	2.30
-F	Japan	vs	Sweden	1.82	4.35	4.55	2.10	1.70
-G	New Zealand	vs	Belgium	16.70	9.09	1.20	1.60	2.30
-G	Egypt	vs	Iran	2.27	4.00	3.23	2.25	1.60
-H	Uruguay	vs	Spain	16.70	9.09	1.20	1.60	2.30
-H	Cape Verde	vs	Saudi Arabia	3.45	4.08	2.15	2.20	1.62
-I	Norway	vs	France	6.45	5.26	1.53	1.90	1.90
-I	Senegal	vs	Iraq	1.42	5.88	8.00	1.80	2.00
-J	Jordan	vs	Argentina	100.00	33.33	1.04	1.35	3.15
-J	Algeria	vs	Austria	4.00	4.17	1.96	2.20	1.62
-K	Colombia	vs	Portugal	4.35	4.31	1.86	2.15	1.65
-K	DR Congo	vs	Uzbekistan	2.47	3.92	2.94	2.35	1.50
-L	Panama	vs	England	66.70	28.60	1.05	1.40	2.90
-L	Croatia	vs	Ghana	1.53	5.26	6.45	1.90	1.90`;
+L	Ghana	vs	Panama	2.03	3.79	3.28	1.8	2
+A	Czech Republic	vs	South Africa	1.74	3.45	5.2	2.15	1.65
+A	Mexico	vs	South Korea	1.9	3.4	4.3	1.62	2.35
+B	Switzerland	vs	Bosnia and Herzegovina	1.65	3.65	5.8	1.95	1.85
+B	Canada	vs	Qatar	1.57	3.8	6.6	1.75	2.15
+C	Brazil	vs	Haiti	1.05	11	50	2.75	1.45
+C	Scotland	vs	Morocco	3.95	3.2	2.05	2.35	1.62
+D	Turkey	vs	Paraguay	2.15	3.2	3.6	2.3	1.65
+D	USA	vs	Australia	1.66	3.8	5.4	1.9	1.9
+E	Germany	vs	Ivory Coast	1.55	4	6.2	2.1	1.7
+E	Ecuador	vs	Curaçao	1.25	5.6	13	2	1.85
+F	Netherlands	vs	Sweden	1.75	3.8	4.6	2	1.85
+F	Tunisia	vs	Japan	4.7	3.4	1.83	1.55	2.45
+G	Belgium	vs	Iran	1.55	4	6.7	1.9	1.9
+G	New Zealand	vs	Egypt	5	3.75	1.7	1.75	2.15
+H	Spain	vs	Saudi Arabia	1.15	7.2	25	2.2	1.65
+H	Uruguay	vs	Cape Verde	1.45	4.5	7.2	1.85	1.95
+I	Norway	vs	Senegal	2.05	3.4	3.7	2	1.85
+I	France	vs	Iraq	1.13	7.2	25	2.15	1.75
+J	Argentina	vs	Austria	1.55	4	6.4	1.85	1.95
+J	Jordan	vs	Algeria	7.2	3.75	1.55	1.9	1.9
+K	Portugal	vs	Uzbekistan	1.18	6.8	17	2.35	1.6
+K	Colombia	vs	DR Congo	1.5	4	7	1.7	2.1
+L	England	vs	Ghana	1.35	4.9	9.2	1.95	1.85
+L	Panama	vs	Croatia	8.6	4.5	1.4	1.9	1.9
+A	South Africa	vs	South Korea	2.75	3.2	2.55	1.72	2.1
+A	Czech Republic	vs	Mexico	3.6	3.4	1.95	1.8	2
+B	Switzerland	vs	Canada	1.95	3.4	3.9	1.75	2.05
+B	Bosnia and Herzegovina	vs	Qatar	1.45	4.4	6.8	2.1	1.7
+C	Scotland	vs	Brazil	7.4	5	1.4	1.85	1.95
+C	Morocco	vs	Haiti	1.35	4.8	8.5	2	1.8
+D	Australia	vs	Paraguay	2.4	3.3	2.85	1.75	2.05
+D	Turkey	vs	USA	2.8	3.25	2.45	1.78	2.02
+E	Ecuador	vs	Germany	6.8	4.8	1.35	2.05	1.75
+E	Curaçao	vs	Ivory Coast	6.2	4.4	1.42	2	1.8
+F	Tunisia	vs	Netherlands	4.6	3.6	1.8	1.72	2.1
+F	Japan	vs	Sweden	2.55	3.2	2.65	1.7	2.15
+G	New Zealand	vs	Belgium	7.2	4.8	1.32	2.05	1.75
+G	Egypt	vs	Iran	2.35	3.15	2.95	1.68	2.2
+H	Uruguay	vs	Spain	4.9	3.8	1.7	1.82	2
+H	Cape Verde	vs	Saudi Arabia	3.6	3.3	2.05	1.75	2.05
+I	Norway	vs	France	5.8	4.2	1.5	1.95	1.85
+I	Senegal	vs	Iraq	1.75	3.5	4.6	1.8	2
+J	Jordan	vs	Argentina	9.5	5.2	1.25	2.1	1.7
+J	Algeria	vs	Austria	2.95	3.25	2.35	1.75	2.05
+K	Colombia	vs	Portugal	3.1	3.25	2.35	1.85	1.95
+K	DR Congo	vs	Uzbekistan	2.2	3.2	3.1	1.72	2.1
+L	Panama	vs	England	8.8	5	1.28	2.05	1.75
+L	Croatia	vs	Ghana	1.85	3.4	4.2	1.78	2.02`;
         eloDataEl.value = `GROUP,TEAM,ELO_RATING
 A,South Korea,1844
 A,Czech Republic,1731
